@@ -62,7 +62,7 @@ class FineTuneMSATransformer(nn.Module):
         
         return upper_triangle_embeddings
     
-    def forward(self, batch_msa_data): 
+    def forward(self, msa_batch_tokens): 
         """
         Perform forward pass. 
         
@@ -72,7 +72,6 @@ class FineTuneMSATransformer(nn.Module):
         Returns:
             output (torch.Tensor): Predicted patristic distance for sequences in batch.
         """
-        msa_batch_labels, msa_batch_strs, msa_batch_tokens = self.msa_batch_converter(batch_msa_data)
         
         # Run MSA transformer - we never set torch.no_grad or eval mode
         results = self.msa_transformer(msa_batch_tokens, repr_layers=[12], need_head_weights=True)

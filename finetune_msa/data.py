@@ -23,13 +23,13 @@ def read_msa(filename, nseq):
     """ Reads the first nseq sequences from an MSA file in fasta format, automatically removes insertions."""
     return [(record.description, remove_insertions(str(record.seq))) for record in itertools.islice(SeqIO.parse(filename, "fasta"), nseq)]
 
-def train_val_test_split(pfam_families, ratio_train_test, ratio_train_val, max_depth, msas_folder, dists_folder):
+def train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_depth, msas_folder, dists_folder):
     """ Load sequences from all families with their respective distances and perfrom split on train and test set. 
     
     Args:
         pfam_families (list): List containing all the pfam_families. 
         ratio_train_test (float): Ratio of data that will be used for training.
-        ratio_train_val (float): Ratio of train data that will be used for validation
+        ratio_val_train (float): Ratio of train data that will be used for validation
         max_depth (int): Max depth of the MSA found for the family.
         msas_folder (pathlib.Path): Path to the MSA folder.
         dists_folder (pathlib.Path): Path to the distance folder.
@@ -57,7 +57,7 @@ def train_val_test_split(pfam_families, ratio_train_test, ratio_train_val, max_d
         np.random.seed(42)
         all_indices = np.arange(len(msa_family))
         train_indices = np.random.choice(len(msa_family), size=round(ratio_train_test*len(msa_family)), replace=False)
-        val_indices = np.random.choice(train_indices, size=round(ratio_train_val*len(msa_family)), replace=False)
+        val_indices = np.random.choice(train_indices, size=round(ratio_val_train*len(msa_family)), replace=False)
 
         # Remove train_indices from all indices - we're left with test indices
         test_indices = np.setdiff1d(all_indices, train_indices)
