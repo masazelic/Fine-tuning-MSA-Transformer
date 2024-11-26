@@ -12,9 +12,8 @@ class FineTuneMSATransformer(nn.Module):
         output_dim (int): Since we do regression to predict patristic distance output_dim = 1.
         dropout_p (float): Dropout probability for regularization.
         activation (callable): The activation function to apply after each hidden layer.
-        batch_size (int): Batch size.
     """
-    def __init__(self, input_dim=144, architecture=[8,16,8], output_dim=1, dropout_p=0.2, batch_size=32):
+    def __init__(self, input_dim=144, architecture=[8,16,8], output_dim=1, dropout_p=0.2):
         
         super().__init__()
         
@@ -25,7 +24,6 @@ class FineTuneMSATransformer(nn.Module):
         # Define some parameters
         self.n_heads = 12
         self.n_layers = 12
-        self.batch_size = batch_size
         
         # FCN model that is going to be build on top of MSA Transformer
         self.layer_sizes = [input_dim] + architecture + [output_dim]
@@ -40,12 +38,13 @@ class FineTuneMSATransformer(nn.Module):
                 self.layers[f'finetune_activation_{i}'] = nn.ReLU()
                 self.layers[f'finetune_dropout_{i}'] = nn.Dropout(dropout_p)
             
-    def extract_collumn_attentions(self, results):
+    def extract_collumn_attentions(self, results, batch_size):
         """
         Extracts information from column attentions for downstream model.
 
         Args:
             results (dict): Result of running MSA Transformer.
+            batch_size (int): Batch size (can be different than fixed value, depending on how many sequences is left in the family).
             
         Returns:
             upper_triangle_embeddings (torch.Tensor): Shape (#sequence pairs in batch, n_heads*n_layers).
@@ -56,18 +55,19 @@ class FineTuneMSATransformer(nn.Module):
         
         # We need to extract data properly for downstream, i.e. we need to have 144 dim embeddings 
         # For each pairwise sequence setup
-        indices = torch.triu_indices(self.batch_size, self.batch_size, offset=1)
+        indices = torch.triu_indices(batch_size, batch_size, offset=1)
         upper_triangle = attns_mean_on_colls_symm[..., indices[0], indices[1]]
         upper_triangle_embeddings = upper_triangle.permute(2,0,1).reshape(-1, self.n_layers * self.n_heads)
         
         return upper_triangle_embeddings
     
-    def forward(self, msa_batch_tokens): 
+    def forward(self, msa_batch_tokens, batch_size): 
         """
         Perform forward pass. 
         
         Args:
             input_data (list): List containing batch_size of protein sequences aligned (MSA).
+            batch_size (int): Batch size (can be different than fixed value, depending on how many sequences is left in the family).
         
         Returns:
             output (torch.Tensor): Predicted patristic distance for sequences in batch.
@@ -77,7 +77,7 @@ class FineTuneMSATransformer(nn.Module):
         results = self.msa_transformer(msa_batch_tokens, repr_layers=[12], need_head_weights=True)
         
         # Run function to get whats needed for predicting distances
-        upper_triangle_embeddings = self.extract_collumn_attentions(results)
+        upper_triangle_embeddings = self.extract_collumn_attentions(results, batch_size)
 
         # Run dowstream FCN
         output = upper_triangle_embeddings

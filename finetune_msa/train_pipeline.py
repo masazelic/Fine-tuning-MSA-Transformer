@@ -11,7 +11,7 @@ import torch.nn as nn
 import peft 
 
 # Defining some constants
-max_iters = 1000
+max_iters = 500
 batch_size = 32
 learning_rate = 0.001
 
@@ -66,7 +66,7 @@ def train_epoch(model, device, dataloader, optimizer, criterion):
         
         # Reset gradients of all tracked variables
         optimizer.zero_grad()
-        prediction = model(msa_batch_tokens).squeeze(-1)
+        prediction = model(msa_batch_tokens, len(batch_seq)).squeeze(-1)
         loss = criterion(prediction, batch_dists)
         train_loss += loss.detach().float()
         
@@ -106,7 +106,7 @@ def evaluate_epoch(model, device, dataloader, criterion):
             batch_dists = batch_dists.to(device)
             
             # Make predictions
-            predictions = model(msa_batch_tokens).squeeze(-1)
+            predictions = model(msa_batch_tokens, len(batch_seq)).squeeze(-1)
             loss = criterion(predictions, batch_dists)
             val_loss += loss.detach().float()
             
@@ -138,24 +138,14 @@ if __name__ == "__main__":
     
     # Get arguments
     args = parser.parse_args()
-    ratio_train_test = pathlib.Path(args.ratio_train_test)
-    ratio_val_train = pathlib.Path(args.ratio_val_train)
-    max_depth = args.max_depth
-    msas_folder = args.msas_folder
-    dists_folder = args.dists_folder
+    ratio_train_test = float(args.ratio_train_test)
+    ratio_val_train = float(args.ratio_val_train)
+    max_depth = int(args.max_depth)
+    msas_folder = pathlib.Path(args.msas_folder)
+    dists_folder = pathlib.Path(args.dists_folder)
     
     # Define the data - train, val, test splits 
     train_data, val_data, test_data = data.train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_depth, msas_folder, dists_folder)
-    
-    # Define respecitve Datasets
-    train_dataset = data.CustomDataset(train_data, batch_size=32)
-    val_dataset = data.CustomDataset(val_data, batch_size=32)
-    test_dataset = data.CustomDataset(test_data, batch_size=32)
-    
-    # Define respective DataLoaders
-    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=None)
-    val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=None)
-    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=None)
     
     # Define Model, Model LoRA, optimizer, loss function
     model = model_finetune.FineTuneMSATransformer().to(device)
@@ -169,17 +159,23 @@ if __name__ == "__main__":
     
     # Train pipeline
     for epoch in range(max_iters):
+
+        # In every iteration we need to load dataloader - because it is iterable
+        train_dataloader, val_dataloader, test_dataloader = data.generate_dataloaders(train_data, val_data, test_data)
         
         # Set model to train mode
         peft_model.train()
         
         # Train
         avg_train_loss = train_epoch(peft_model, device, train_dataloader, optimizer, criterion)
-        print(f"Epoch {epoch}/{max_iters}: {avg_train_loss:.4f}")
         
         # Evaluate the model on the validation subset
         peft_model.eval()
         avg_eval_loss = evaluate_epoch(peft_model, device, val_dataloader, criterion)
+        print(f"Epoch {epoch}/{max_iters}: Train {avg_train_loss:.4f} // Val {avg_eval_loss:.4f}")
+    
+    avg_eval_loss_fin = evaluate_epoch(peft_model, device, val_dataloader, criterion)
+    print(f"Final validation loss: {avg_eval_loss_fin:.4f}")
     
     
         

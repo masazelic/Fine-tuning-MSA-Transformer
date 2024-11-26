@@ -88,6 +88,32 @@ def train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_d
         test_data[family] = (msa_test_family, dists_test_family)
         
     return train_data, val_data, test_data
+
+def generate_dataloaders(train_data, val_data, test_data):
+    """
+    Generates dataloader from respective data dictionaries.
+
+    Args:
+        train_data (dict): Dictionary containing train sequences and respective distances for each family.
+        val_data (dict):  Dictionary containing val sequences and respective distances for each family.
+        test_data (dict):  Dictionary containing test sequences and respective distances for each family.
+
+    Returns:
+        train_dataloader (torch.DataLoader): DataLoader for train data.
+        val_dataloader (torch.DataLoader): DataLoader for val data.
+        test_dataloader (torch.DataLoader): DataLoader for test data.
+    """
+    # Define respecitve Datasets
+    train_dataset = CustomDataset(train_data, batch_size=32)
+    val_dataset = CustomDataset(val_data, batch_size=32)
+    test_dataset = CustomDataset(test_data, batch_size=32)
+    
+    # Define respective DataLoaders
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=None)
+    val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=None)
+    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=None)
+
+    return train_dataloader, val_dataloader, test_dataloader
         
 class CustomDataset(IterableDataset):
     
