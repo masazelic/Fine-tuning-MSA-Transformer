@@ -13,7 +13,7 @@ import peft
 # Defining some constants
 max_iters = 500
 batch_size = 32
-learning_rate = 0.001
+learning_rate = 0.005
 
 pfam_families = [
     "PF00004",
@@ -113,40 +113,16 @@ def evaluate_epoch(model, device, dataloader, criterion):
         num_batches += 1
     
     return val_loss / num_batches
-            
 
-if __name__ == "__main__":
+def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, msas_folder, dists_folder, checkpoint_folder, approach):
+    """ Function that does model training for the case of synthetic sequences generated with bmDCA. """
     
-    # Parsing command-line options
-    parser = ArgumentParser()
-    
-    # Ratio train-test
-    parser.add_argument('-tt', '--ratio_train_test', action="store", dest="ratio_train_test", default='0.8', help='Train data ratio.')
-    
-    # Ratio train-val
-    parser.add_argument('-vt', '--ratio_val_train', action="store", dest="ratio_val_train", default='0.1', help='Validation data ratio.')
-    
-    # Max depth
-    parser.add_argument('-md', '--max_depth', action='store', dest='max_depth', default='600', help='Max depth MSA sequences from each family.')
-    
-    # MSAs folder 
-    parser.add_argument('-mf', '--msas_folder', action='store', dest='msas_folder', default='/content/drive/MyDrive/data/subsampled_msa', help='MSAs folder path.')
-    
-    # Dists folder
-    parser.add_argument('-df', '--dists_folder', action='store', dest='dists_folder', default='/content/drive/MyDrive/data/distance_matrix', help='Distance matrices folder path.')
-    
-    
-    # Get arguments
-    args = parser.parse_args()
-    ratio_train_test = float(args.ratio_train_test)
-    ratio_val_train = float(args.ratio_val_train)
-    max_depth = int(args.max_depth)
-    msas_folder = pathlib.Path(args.msas_folder)
-    dists_folder = pathlib.Path(args.dists_folder)
-    
+    # Checkpoint path - define with the respect to the approach
+    checkpoint_folder = checkpoint_folder / f"{approach}_folder"
+
     # Define the data - train, val, test splits 
     train_data, val_data, test_data = data.train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_depth, msas_folder, dists_folder)
-    
+
     # Define Model, Model LoRA, optimizer, loss function
     model = model_finetune.FineTuneMSATransformer().to(device)
     store_target_modules, store_modules_to_save = utils.get_target_save_modules(model)
@@ -168,6 +144,12 @@ if __name__ == "__main__":
         
         # Train
         avg_train_loss = train_epoch(peft_model, device, train_dataloader, optimizer, criterion)
+
+        # Save model checkpoint if certain number of epochs is reached
+        if (epoch % 100 == 0) and (epoch != 0) :
+            path = checkpoint_folder / f"checkpoint_{epoch}.pt"
+            torch.save({'epoch': epoch, 'model_state_dict': peft_model.state_dict(), 'optimizer_state_dict': optimizer.state_dict(),
+            'loss': avg_train_loss}, path)
         
         # Evaluate the model on the validation subset
         peft_model.eval()
@@ -176,6 +158,114 @@ if __name__ == "__main__":
     
     avg_eval_loss_fin = evaluate_epoch(peft_model, device, val_dataloader, criterion)
     print(f"Final validation loss: {avg_eval_loss_fin:.4f}")
+
+def train_model_esm(esm_folder, max_iters, checkpoint_folder, approach):
+    " Function that does model training for the case of synthetic sequences generated with ESM. "
+
+    # Checkpoint path - define with the respect to the approach
+    checkpoint_folder = checkpoint_folder / f"{approach}_folder"
+
+    # Define the data - train, val, test, splits
+    train_path_alignments, train_path_trees, test_path_alignments, test_path_trees = data.create_paths(esm_folder)
+    train_msa_seq, train_trees, val_msa_seq, val_trees = data.train_val_split(train_path_alignments, train_path_trees)
+
+    # Define Model, Model LoRA, optimizer, loss function
+    model = model_finetune.FineTuneMSATransformer().to(device)
+    store_target_modules, store_modules_to_save = utils.get_target_save_modules(model)
+
+    config = peft.LoraConfig(r=8, target_modules=store_target_modules, modules_to_save=store_modules_to_save)
+    peft_model = peft.get_peft_model(model, config)
+    
+    optimizer = torch.optim.Adam(peft_model.parameters(), lr=learning_rate)
+    criterion = nn.MSELoss()
+
+    # Train pipeline
+    for epoch in range(max_iters):
+
+        # In every iteration we need to load dataloader - because it is iterable
+        train_dataloader, val_dataloader, _ = data.generate_dataloaders_esm(train_msa_seq, train_trees, train_path_alignments, train_path_trees, val_msa_seq, val_trees, test_path_alignments, test_path_trees) 
+
+        # Set model to train mode
+        peft_model.train()
+        
+        # Train
+        avg_train_loss = train_epoch(peft_model, device, train_dataloader, optimizer, criterion)
+
+        # Save model checkpoint if certain number of epochs is reached
+        if (epoch % 100 == 0) and (epoch != 0) :
+            path = checkpoint_folder / f"checkpoint_{epoch}.pt"
+            torch.save({'epoch': epoch, 'model_state_dict': peft_model.state_dict(), 'optimizer_state_dict': optimizer.state_dict(),
+            'loss': avg_train_loss}, path)
+        
+        # Evaluate the model on the validation subset
+        peft_model.eval()
+        avg_eval_loss = evaluate_epoch(peft_model, device, val_dataloader, criterion)
+        print(f"Epoch {epoch}/{max_iters}: Train {avg_train_loss:.4f} // Val {avg_eval_loss:.4f}")
+    
+    avg_eval_loss_fin = evaluate_epoch(peft_model, device, val_dataloader, criterion)
+    print(f"Final validation loss: {avg_eval_loss_fin:.4f}")
+        
+if __name__ == "__main__":
+    
+    # Parsing command-line options
+    parser = ArgumentParser()
+    
+    # Ratio train-test
+    parser.add_argument('-tt', '--ratio_train_test', action='store', dest='ratio_train_test', default='0.8', help='Train data ratio.')
+    
+    # Ratio train-val
+    parser.add_argument('-vt', '--ratio_val_train', action='store', dest='ratio_val_train', default='0.1', help='Validation data ratio.')
+    
+    # Max depth
+    parser.add_argument('-md', '--max_depth', action='store', dest='max_depth', default='600', help='Max depth MSA sequences from each family.')
+    
+    # MSAs folder for bmDCA
+    parser.add_argument('-mf', '--msas_folder', action='store', dest='msas_folder', default='/content/drive/MyDrive/data/subsampled_msa', help='MSAs folder path.')
+    
+    # Dists folder for bmDCA
+    parser.add_argument('-df', '--dists_folder', action='store', dest='dists_folder', default='/content/drive/MyDrive/data/distance_matrix', help='Distance matrices folder path.')
+
+    # Checkpoint folder
+    parser.add_argument('-cp', '--checkpoint_folder', action='store', dest='checkpoint_folder', default='/content/drive/MyDrive/data/checkpoints', help='Folder that stores model checkpoints over training.')
+
+    # Approach
+    parser.add_argument('-a', '--approach', action='store', dest='approach', default='esm', help='Tells which synthetic sequences to use. Can be ESM or bmDCA.')
+
+    # Folder where data for ESM is stored - assumes following folder structure
+    # - Folder with data (argument)
+    #   - train
+    #     - alignments
+    #     - trees
+    #   - val
+    #     - alignments
+    #     - trees
+    parser.add_argument('-esmf', '--esm_folder', action='store', dest='esm_folder', default='/content/drive/MyDrive/data/Synthetic_data=50', help='Folder where data for ESM s stored with assumed folder strucutre.')
+    
+    # Get arguments
+    args = parser.parse_args()
+    ratio_train_test = float(args.ratio_train_test)
+    ratio_val_train = float(args.ratio_val_train)
+    max_depth = int(args.max_depth)
+    msas_folder = pathlib.Path(args.msas_folder)
+    dists_folder = pathlib.Path(args.dists_folder)
+    checkpoint_folder = pathlib.Path(args.checkpoint_folder)
+    approach = args.approach
+    esm_folder = pathlib.Path(args.esm_folder)
+
+    if approach == "bmDCA":
+        train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, msas_folder, dists_folder, checkpoint_folder, approach)
+    
+    if approach == "esm":
+        train_model_esm(esm_folder, max_iters, checkpoint_folder, approach)
+
+
+    
+
+
+
+    
+    
+    
     
     
         
