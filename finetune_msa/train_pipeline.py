@@ -226,7 +226,7 @@ if __name__ == "__main__":
     parser.add_argument('-df', '--dists_folder', action='store', dest='dists_folder', default='/content/drive/MyDrive/data/distance_matrix', help='Distance matrices folder path.')
 
     # Checkpoint folder
-    parser.add_argument('-cp', '--checkpoint_folder', action='store', dest='checkpoint_folder', default='/content/drive/MyDrive/data/checkpoints', help='Folder that stores model checkpoints over training.')
+    parser.add_argument('-cp', '--checkpoint_folder', action='store', dest='checkpoint_folder', default='./checkpoints', help='Folder that stores model checkpoints over training.')
 
     # Approach
     parser.add_argument('-a', '--approach', action='store', dest='approach', default='esm', help='Tells which synthetic sequences to use. Can be ESM or bmDCA.')
@@ -239,7 +239,7 @@ if __name__ == "__main__":
     #   - val
     #     - alignments
     #     - trees
-    parser.add_argument('-esmf', '--esm_folder', action='store', dest='esm_folder', default='/content/drive/MyDrive/data/Synthetic_data=50', help='Folder where data for ESM s stored with assumed folder strucutre.')
+    parser.add_argument('-esmf', '--esm_folder', action='store', dest='esm_folder', default='./Synthetic_data=50', help='Folder where data for ESM s stored with assumed folder strucutre.')
     
     # Get arguments
     args = parser.parse_args()
