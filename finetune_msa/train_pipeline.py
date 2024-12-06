@@ -9,7 +9,7 @@ import pathlib
 import torch
 import torch.nn as nn
 import peft 
-import tqdm
+from tqdm import tqdm
 
 # Defining some constants
 max_iters = 100
