@@ -195,7 +195,12 @@ def generate_dataloaders_esm(train_msa_seq, train_trees, train_path_alignments, 
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=None)
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=None)
 
-    return train_dataloader, val_dataloader, test_dataloader
+    # We need lengths for each dataloader to support tqdm
+    len_train = len(train_msa_seq)
+    len_val = len(val_msa_seq)
+    len_test = len(test_msa_seq)
+
+    return train_dataloader, len_train, val_dataloader, len_val, test_dataloader, len_test
 
 def create_distance_matrix(msa_sequences, tree):
     """ Provided MSA sequences (their names) and tree create distance matrix. """

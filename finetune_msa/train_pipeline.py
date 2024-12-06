@@ -9,9 +9,10 @@ import pathlib
 import torch
 import torch.nn as nn
 import peft 
+import tqdm
 
 # Defining some constants
-max_iters = 500
+max_iters = 100
 batch_size = 32
 learning_rate = 0.005
 
@@ -36,7 +37,7 @@ pfam_families = [
 # Set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def train_epoch(model, device, dataloader, optimizer, criterion):
+def train_epoch(model, device, dataloader, len_train, optimizer, criterion):
     """
     Train the model for one epoch.
     
@@ -44,6 +45,7 @@ def train_epoch(model, device, dataloader, optimizer, criterion):
         model (nn.Module): LoRA model we are fine-tuning.
         device ("cpu" or "cuda"): Device on which we are doing training depending on availability.
         dataloader (torch.Dataloader): Dataset data-loader.
+        len_train (int): Number of batches in train dataset.
         optimizer (torch.optim): Optimizer for loss-minimization.
         criterion (nn.Loss): Criterion we are minimizing.
         
@@ -57,9 +59,10 @@ def train_epoch(model, device, dataloader, optimizer, criterion):
     num_batches = 0
     
     # Iterate over all batches
-    for batch_seq, batch_dists in dataloader:
+    for batch in tqdm(dataloader, total=len_train):
         
         # Tokenize and prepare
+        batch_seq, batch_dists = batch
         _, _, msa_batch_tokens = model.msa_batch_converter(batch_seq)
         msa_batch_tokens = msa_batch_tokens.to(device)
         batch_dists = batch_dists.float().to(device)
@@ -77,7 +80,7 @@ def train_epoch(model, device, dataloader, optimizer, criterion):
     
     return train_loss / num_batches
 
-def evaluate_epoch(model, device, dataloader, criterion):
+def evaluate_epoch(model, device, dataloader, len_val, criterion):
     """
     Evaluate model on one epoch.
     
@@ -95,9 +98,10 @@ def evaluate_epoch(model, device, dataloader, criterion):
     num_batches = 0
     
     # Iterate over all batches
-    for batch_seq, batch_dists in dataloader:
+    for batch in tqdm(dataloader, total=len_val):
         
         # Tokenize and prepare
+        batch_seq, batch_dists = batch
         _, _, msa_batch_tokens = model.msa_batch_converter(batch_seq)
         
         # There is no backprop in evaluation
@@ -163,7 +167,7 @@ def train_model_esm(esm_folder, max_iters, checkpoint_folder, approach):
     " Function that does model training for the case of synthetic sequences generated with ESM. "
 
     # Checkpoint path - define with the respect to the approach
-    checkpoint_folder = checkpoint_folder / f"{approach}_folder"
+    # checkpoint_folder = checkpoint_folder / f"{approach}_folder"
 
     # Define the data - train, val, test, splits
     train_path_alignments, train_path_trees, test_path_alignments, test_path_trees = data.create_paths(esm_folder)
@@ -183,26 +187,26 @@ def train_model_esm(esm_folder, max_iters, checkpoint_folder, approach):
     for epoch in range(max_iters):
 
         # In every iteration we need to load dataloader - because it is iterable
-        train_dataloader, val_dataloader, _ = data.generate_dataloaders_esm(train_msa_seq, train_trees, train_path_alignments, train_path_trees, val_msa_seq, val_trees, test_path_alignments, test_path_trees) 
+        train_dataloader, len_train, val_dataloader, len_val, _, _ = data.generate_dataloaders_esm(train_msa_seq, train_trees, train_path_alignments, train_path_trees, val_msa_seq, val_trees, test_path_alignments, test_path_trees) 
 
         # Set model to train mode
         peft_model.train()
         
         # Train
-        avg_train_loss = train_epoch(peft_model, device, train_dataloader, optimizer, criterion)
+        avg_train_loss = train_epoch(peft_model, device, train_dataloader, len_train, optimizer, criterion)
 
         # Save model checkpoint if certain number of epochs is reached
-        if (epoch % 100 == 0) and (epoch != 0) :
+        if (epoch % 20 == 0) and (epoch != 0) :
             path = checkpoint_folder / f"checkpoint_{epoch}.pt"
             torch.save({'epoch': epoch, 'model_state_dict': peft_model.state_dict(), 'optimizer_state_dict': optimizer.state_dict(),
             'loss': avg_train_loss}, path)
         
         # Evaluate the model on the validation subset
         peft_model.eval()
-        avg_eval_loss = evaluate_epoch(peft_model, device, val_dataloader, criterion)
+        avg_eval_loss = evaluate_epoch(peft_model, device, val_dataloader, len_val, criterion)
         print(f"Epoch {epoch}/{max_iters}: Train {avg_train_loss:.4f} // Val {avg_eval_loss:.4f}")
     
-    avg_eval_loss_fin = evaluate_epoch(peft_model, device, val_dataloader, criterion)
+    avg_eval_loss_fin = evaluate_epoch(peft_model, device, val_dataloader, len_val, criterion)
     print(f"Final validation loss: {avg_eval_loss_fin:.4f}")
         
 if __name__ == "__main__":
