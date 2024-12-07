@@ -4,27 +4,11 @@ import torch
 import random
 import numpy as np
 import pathlib
-import itertools
+import utils
 from Bio import SeqIO
 from Bio import Phylo
-from sklearn.model_selection import train_test_split
 
 from torch.utils.data import IterableDataset, DataLoader    
-
-def remove_insertions(sequence):
-    """ Removes any insertions into the sequences. Needed to load aligned sequences in an MSA."""
-    
-    # Making dictionary where each lowercase ascii letter is key and value is set to None
-    deletekeys = dict.fromkeys(string.ascii_lowercase) 
-    deletekeys["."] = None
-    deletekeys["*"] = None
-    translation = str.maketrans(deletekeys)
-    
-    return sequence.translate(translation)
-
-def read_msa(filename, nseq):
-    """ Reads the first nseq sequences from an MSA file in fasta format, automatically removes insertions."""
-    return [(record.description, remove_insertions(str(record.seq))) for record in itertools.islice(SeqIO.parse(filename, "fasta"), nseq)]
 
 def train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_depth, msas_folder, dists_folder):
     """ Load sequences from all families with their respective distances and perfrom split on train and test set. 
@@ -53,7 +37,7 @@ def train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_d
         dists_path_family = dists_folder / f"{family}_subtree.npy"
         
         # Load MSA and distances
-        msa_family = read_msa(msas_path_family, max_depth)
+        msa_family = utils.read_msa(msas_path_family, max_depth)
         dists_family = np.load(dists_path_family)
         
         # Select sequences that will go in train and test / set the seed for the reproduciblity 
@@ -92,52 +76,6 @@ def train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_d
         
     return train_data, val_data, test_data
 
-def train_val_split(msa_path, tree_path, ratio=0.15, max_depth=50):
-    """ Train-validation split for ESM generated sequences. """
-    
-    # Load paths to the sequences
-    list_msa_seq = os.listdir(msa_path)
-    list_trees = os.listdir(tree_path)
-
-    # We need to sort these sequences as they can be randomly read
-    list_msa_seq.sort(key=lambda x: (x.split(' ')[0], int(x.split(' ')[1].split('.')[0])))
-    list_trees.sort(key=lambda x: (x.split(' ')[0], int(x.split(' ')[1].split('.')[0])))
-
-    # Split indices in train and validation
-    indices = np.arange(len(list_msa_seq))
-    train_indices, val_indices = train_test_split(indices, test_size=ratio, random_state=42)
-
-    # Extract train and validation pairs
-    train_msa_seq = []
-    train_trees = []
-    validation_msa_seq = []
-    validation_trees = []
-
-    for idx in train_indices:
-        train_msa_seq.append(list_msa_seq[idx])
-        train_trees.append(list_trees[idx])
-
-    for idx in val_indices:
-        validation_msa_seq.append(list_msa_seq[idx])
-        validation_trees.append(list_trees[idx])
-
-    return train_msa_seq, train_trees, validation_msa_seq, validation_trees
-
-def create_paths(esm_folder):
-    """ Creates path for ESM data train/test splitting. """
-
-    train_path = esm_folder / "train"
-    test_path = esm_folder / "val"
-
-    # Paths for train and test alignments and trees
-    train_path_alignments = train_path / "alignments"
-    train_path_trees = train_path / "trees"
-
-    test_path_alignments = test_path / "alignments"
-    test_path_trees = test_path / "trees"
-
-    return train_path_alignments, train_path_trees, test_path_alignments, test_path_trees
-
 def generate_dataloaders_bmDCA(train_data, val_data, test_data):
     """
     Generates dataloader from respective data dictionaries - bmDCA synthetic data.
@@ -164,60 +102,7 @@ def generate_dataloaders_bmDCA(train_data, val_data, test_data):
 
     return train_dataloader, val_dataloader, test_dataloader
 
-def generate_dataloaders_esm(train_msa_seq, train_trees, train_path_alignments, train_path_trees, val_msa_seq, val_trees, test_path_alignments, test_path_trees):
-    """
-    Generate dataloaders from respective sequences and trees.
 
-    Args: 
-        train_msa_seq (list): Names of MSA alignment files that belong to train subset.
-        train_trees (list): Names of tree files that belong to train subset.
-        val_msa_seq (list): Names of MSA alignment files that belong to val subset.
-        val_trees (list): Names of tree files that belong to val subset.
-        test_path_alignments (path): Path to the test aligments. 
-        test_path_trees (path): Path to the test trees.
-
-    Returns:
-    """
-    # Define respective Datasets for train and val
-    train_dataset = CustomDatasetEsm(train_msa_seq, train_trees, train_path_alignments, train_path_trees)
-    val_dataset = CustomDatasetEsm(val_msa_seq, val_trees, train_path_alignments, train_path_trees)
-
-    test_msa_seq = os.listdir(test_path_alignments)
-    test_trees = os.listdir(test_path_trees)
-
-    # Sort test dataset
-    test_msa_seq.sort(key=lambda x: (x.split(' ')[0], int(x.split(' ')[1].split('.')[0])))
-    test_trees.sort(key=lambda x: (x.split(' ')[0], int(x.split(' ')[1].split('.')[0])))
-    test_dataset = CustomDatasetEsm(test_msa_seq, test_trees, test_path_alignments, test_path_trees)
-
-    # Define respective DataLoaders
-    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=None)
-    val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=None)
-    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=None)
-
-    # We need lengths for each dataloader to support tqdm
-    len_train = len(train_msa_seq)
-    len_val = len(val_msa_seq)
-    len_test = len(test_msa_seq)
-
-    return train_dataloader, len_train, val_dataloader, len_val, test_dataloader, len_test
-
-def create_distance_matrix(msa_sequences, tree):
-    """ Provided MSA sequences (their names) and tree create distance matrix. """
-    num_sequences = len(msa_sequences)
-
-    # Create distance matrix that will store these 
-    distance_matrix = np.zeros((num_sequences, num_sequences))
-
-    for i in range(num_sequences):
-        for j in range(i + 1, num_sequences):
-            # Calculate distance between sequence pairs using tree
-            distance = tree.distance(msa_sequences[i][0], msa_sequences[j][0])
-            distance_matrix[i, j] = distance
-            distance_matrix[j, i] = distance  # Symmetric matrix
-    
-    return distance_matrix
-        
 class CustomDatasetbmDCA(IterableDataset):
     
     def __init__(self, family_data, batch_size):
@@ -273,53 +158,4 @@ class CustomDatasetbmDCA(IterableDataset):
             batch_distances = torch.Tensor(distances[triu_indices_batch])
             
             yield batch_sequences, batch_distances
-
-class CustomDatasetEsm(IterableDataset):
-    """ Custom Dataset for loading sequences obtained using ESM-2 sampling. """
-    def __init__(self, alignments, trees, alignments_path, trees_path):
-        """
-        Custom dataset for loading the data. 
-        
-        Args:   
-            tree_path (string): Path to the trees along which synthetic sequences are generated. 
-            alignments_path (string): Path to the synthetic sequences. 
-        """
-        super().__init__()
-
-        # Define the path to trees and alignments
-        self.alignments_path = alignments_path
-        self.trees_path = trees_path
-
-        # Esentially os.listdir of these paths
-        self.list_tree_path = trees
-        self.list_alignments_path = alignments
-        
-        self.max_depth = 50
-        
-    def __iter__(self):
-        """ Create iterator for sampling. Since we know that one example from a family has up to 50 sequences that enough for one batch. """
-        
-        while self.list_tree_path:
-            
-            # Select index of a family which will be generated as a batch
-            index = int(np.random.choice(len(self.list_tree_path), 1))
-            # Based on that index we need to select both sequences and respective tree
-            tree_path = self.trees_path / f"{self.list_tree_path[index]}"
-            msa_path = self.alignments_path / f"{self.list_alignments_path[index]}"
-           
-            msa_sequences = read_msa(msa_path, self.max_depth)
-            tree = Phylo.read(tree_path, "newick")
-
-            # Create their respective distances
-            distance_matrix = create_distance_matrix(msa_sequences, tree)
-            n_rows = distance_matrix.shape[-1]
-            triu_indices_batch = np.triu_indices(n_rows, k=1)
-            batch_distances = distance_matrix[triu_indices_batch] 
-
-            # Remove the processed element from the lists
-            self.list_tree_path.pop(index)
-            self.list_alignments_path.pop(index)
-
-            yield msa_sequences, batch_distances
-
 

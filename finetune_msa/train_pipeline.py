@@ -1,5 +1,6 @@
 import model_finetune
-import data
+import data_esm
+import data_bmdca
 import utils 
 
 
@@ -125,7 +126,7 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
     checkpoint_folder = checkpoint_folder / f"{approach}_folder"
 
     # Define the data - train, val, test splits 
-    train_data, val_data, test_data = data.train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_depth, msas_folder, dists_folder)
+    train_data, val_data, test_data = data_bmdca.train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_depth, msas_folder, dists_folder)
 
     # Define Model, Model LoRA, optimizer, loss function
     model = model_finetune.FineTuneMSATransformer().to(device)
@@ -141,7 +142,7 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
     for epoch in range(max_iters):
 
         # In every iteration we need to load dataloader - because it is iterable
-        train_dataloader, val_dataloader, test_dataloader = data.generate_dataloaders(train_data, val_data, test_data)
+        train_dataloader, val_dataloader, test_dataloader = data_bmdca.generate_dataloaders(train_data, val_data, test_data)
         
         # Set model to train mode
         peft_model.train()
@@ -169,9 +170,13 @@ def train_model_esm(esm_folder, max_iters, checkpoint_folder, approach):
     # Checkpoint path - define with the respect to the approach
     # checkpoint_folder = checkpoint_folder / f"{approach}_folder"
 
-    # Define the data - train, val, test, splits
-    train_path_alignments, train_path_trees, test_path_alignments, test_path_trees = data.create_paths(esm_folder)
-    train_msa_seq, train_trees, val_msa_seq, val_trees = data.train_val_split(train_path_alignments, train_path_trees)
+    # Load data (we have predefined train, val, test splits)
+
+    train_dict = data_esm.read_pickle(esm_folder / "train.pkl")
+    val_dict = data_esm.read_pickle(esm_folder / "val.pkl")    
+
+    train_dataloader, len_train = data_esm.generate_dataloader_esm(train_dict)
+    val_dataloader, len_val = data_esm.generate_dataloader_esm(val_dict)
 
     # Define Model, Model LoRA, optimizer, loss function
     model = model_finetune.FineTuneMSATransformer().to(device)
@@ -185,9 +190,6 @@ def train_model_esm(esm_folder, max_iters, checkpoint_folder, approach):
 
     # Train pipeline
     for epoch in range(max_iters):
-
-        # In every iteration we need to load dataloader - because it is iterable
-        train_dataloader, len_train, val_dataloader, len_val, _, _ = data.generate_dataloaders_esm(train_msa_seq, train_trees, train_path_alignments, train_path_trees, val_msa_seq, val_trees, test_path_alignments, test_path_trees) 
 
         # Set model to train mode
         peft_model.train()

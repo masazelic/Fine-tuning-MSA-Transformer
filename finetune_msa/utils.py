@@ -1,6 +1,8 @@
 import torch 
 import string
 import re
+import itertools
+from Bio import SeqIO
 
 def get_target_save_modules(model):
     """
@@ -53,3 +55,18 @@ def get_modules_to_save(name):
         satisfy = True
 
     return satisfy    
+
+def remove_insertions(sequence):
+    """ Removes any insertions into the sequences. Needed to load aligned sequences in an MSA."""
+    
+    # Making dictionary where each lowercase ascii letter is key and value is set to None
+    deletekeys = dict.fromkeys(string.ascii_lowercase) 
+    deletekeys["."] = None
+    deletekeys["*"] = None
+    translation = str.maketrans(deletekeys)
+    
+    return sequence.translate(translation)
+
+def read_msa(filename, nseq):
+    """ Reads the first nseq sequences from an MSA file in fasta format, automatically removes insertions."""
+    return [(record.description, remove_insertions(str(record.seq))) for record in itertools.islice(SeqIO.parse(filename, "fasta"), nseq)]
