@@ -177,7 +177,7 @@ def hyperparameter_tuning(attns_train, dists_train, layer_structure, learning_ra
     print("Best classifier achitecture: ", best_layer_structure)
     print("Best learning rate: ", best_lr)
 
-def merge_all_families(normalize_dists=False, ensure_same_size=False, zero_attention_diagonal=False):
+def merge_all_families(normalize_dists=True, ensure_same_size=False, zero_attention_diagonal=False):
     """ For loading all the families. """
 
     attns_train_random = []
@@ -214,7 +214,7 @@ def merge_all_families(normalize_dists=False, ensure_same_size=False, zero_atten
 
     return attns_train, dists_train, attns_test, dists_test
                
-def perform_NN(normalize_dists=False, ensure_same_size=False, zero_attention_diagonal=False):
+def perform_NN(normalize_dists=True, ensure_same_size=False, zero_attention_diagonal=False):
     """ Perform NN training and evaluation. """
     
     # Dictionary for storing the results
