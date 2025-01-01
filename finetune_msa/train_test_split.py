@@ -24,8 +24,8 @@ import matplotlib.pyplot as plt
 # IMPORTANT CONSTANTS
 
 MSAS_FOLDER = pathlib.Path("/content/drive/MyDrive/data/subsampled_msa")
-DISTS_FOLDER = pathlib.Path("/content/drive/MyDrive/data/distance_matrix")
-ATTNS_FOLDER_RAND = pathlib.Path(f"/content/drive/MyDrive/data/col_attentions_random")
+DISTS_FOLDER = pathlib.Path("./distance_matrix")
+ATTNS_FOLDER_RAND = pathlib.Path(f"./col_attentions_random")
 ATTNS_FOLDER_SUBT = pathlib.Path(f"/content/drive/MyDrive/data/col_attentions_subtree")
 
 pfam_families = ["PF00004", "PF00005", "PF00041", "PF00072", "PF00076", "PF00096", "PF00153", "PF00271", "PF00397", "PF00512", "PF00595", "PF01535", "PF02518", "PF07679", "PF13354"]
