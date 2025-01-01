@@ -263,7 +263,7 @@ def train_final_model():
     
     # Parameters from above
     architecture = [512, 256, 128, 64, 32]
-    num_epochs = 100
+    num_epochs = 300
     learning_rate = 0.001
     batch_size = 32
 
@@ -312,19 +312,19 @@ def train_final_model():
         
         break
 
-        # Plotting loss - for overfitting
-        plt.figure(figsize=(6, 4))
-        plt.plot(np.arange(i), train_loss_fold, label='train loss')
-        plt.plot(np.arange(i), evaluation_loss_fold, label='val loss')
-        plt.title('Test and validation loss on Fold')
-        plt.xlabel('epoch')
-        plt.ylabel('loss')
-        plt.legend()
-        plt.save_fig('overfitting.png')
+    # Plotting loss - for overfitting
+    plt.figure(figsize=(6, 4))
+    plt.plot(np.arange(i), train_loss_fold, label='train loss')
+    plt.plot(np.arange(i), evaluation_loss_fold, label='val loss')
+    plt.title('Test and validation loss on Fold')
+    plt.xlabel('epoch')
+    plt.ylabel('loss')
+    plt.legend()
+    plt.save_fig('overfitting.png')
 
-        # Save the model
-        path = 'trained_model.pth'
-        torch.save(fcn.state_dict(), path)
+    # Save the model
+    path = 'trained_model.pth'
+    torch.save(fcn.state_dict(), path)
 
 def evaluate_model(path, device='cpu'):
     """ After we trained the model with best hyperparameters, we are going to evaluate it. """
