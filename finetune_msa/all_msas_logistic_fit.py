@@ -120,7 +120,7 @@ def create_dist_comparison_mat(y, y_pred, n_rows):
 
     return comparison_mat
 
-if __name__ == "__name__":
+if __name__ == "__main__":
     
     # Plotting settings
     SMALL_SIZE = 50
