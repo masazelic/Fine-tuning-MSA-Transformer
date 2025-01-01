@@ -146,6 +146,9 @@ if __name__ == "__main__":
     DISTS_FOLDER = pathlib.Path("./distance_matrix")
     ATTNS_FOLDER = pathlib.Path("./col_attentions_subtree")
     HAMM_FOLDER = pathlib.Path("./hamming_random")
+    
+    print(DISTS_FOLDER)
+    print(ATTNS_FOLDER)
 
     pfam_families = [
         "PF00004",
