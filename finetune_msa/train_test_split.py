@@ -11,6 +11,7 @@ from numpy.random import default_rng
 import torch
 from torch.utils.data import DataLoader, TensorDataset, SubsetRandomSampler
 import torch.optim as optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torchsummary import summary
 
 from sklearn.model_selection import KFold
@@ -34,10 +35,10 @@ SEED = 42
 rng = np.random.default_rng(SEED)
 
 # Grid search parameters
-layer_structure = [[256, 128, 64]]
-learning_rates = [0.005]
+layer_structure = [[512, 256, 128, 64, 32]]
+learning_rates = [0.001]
 k_fold = 5
-batch_size = 128
+batch_size = 32
 num_epochs = [500] 
 
 # Set device
@@ -130,10 +131,14 @@ def hyperparameter_tuning(attns_train, dists_train, layer_structure, learning_ra
                     input_dim = attns_train.shape[1]
                     fcn = model_FCN.FullyConnectedNN(input_dim=input_dim, hidden_layers=layers).to(device)
                     print(fcn)
-                    optimizer = optim.Adam(fcn.parameters(), lr=lr, weight_decay=10e-4)
+                    optimizer = optim.Adam(fcn.parameters(), lr=lr)
+                    scheduler = ReduceLROnPlateau(optimizer, 'min', 0.5)
+                    early_stopping = model_FCN.EarlyStopping(patience=15, delta=0.00005)
+                    i = 0
                 
                     # Train model for number of epochs
                     for epoch in range(num_epoch):
+                        i += 1
                         avg_train_loss = model_FCN.train_epoch(fcn, device, train_loader, optimizer)
                         avg_eval_loss, _, _ = model_FCN.evaluate(fcn, device, fold_loader)
 
@@ -142,12 +147,18 @@ def hyperparameter_tuning(attns_train, dists_train, layer_structure, learning_ra
                         evaluation_loss_fold.append(avg_eval_loss)
                         
                         #if epoch == (num_epoch - 1):
-                        print(f"Epoch {epoch}/{num_epoch}: {avg_train_loss:.4f}")
+                        print(f"Epoch {epoch}/{num_epoch}: Train Loss {avg_train_loss:.4f} // Val Loss {avg_eval_loss:.4f}")
+
+                        scheduler.step(avg_eval_loss)
+                        early_stopping(avg_eval_loss, fcn)
+                        if early_stopping.early_stop:
+                            print("Early stopping")
+                            break
 
                     # Plotting loss - for overfitting
                     plt.figure(figsize=(6, 4))
-                    plt.plot(np.arange(num_epoch), train_loss_fold, label='train loss')
-                    plt.plot(np.arange(num_epoch), evaluation_loss_fold, label='val loss')
+                    plt.plot(np.arange(i), train_loss_fold, label='train loss')
+                    plt.plot(np.arange(i), evaluation_loss_fold, label='val loss')
                     plt.title('Test and validation loss on Fold')
                     plt.xlabel('epoch')
                     plt.ylabel('loss')
@@ -242,34 +253,93 @@ def perform_NN(normalize_dists=True, ensure_same_size=False, zero_attention_diag
     # Tune hyperparameters
     hyperparameter_tuning(attns_train, dists_train, layer_structure, learning_rates, num_epochs, batch_size, k_fold, device)
 
-def train_and_evaluate_model():
-    """ After we determined what are the best hyperparameters, we are going to train a model using them. """
+def train_final_model():
+    """ After cross-validation with hyperparameter tuning we are training the model. """
 
-    # Do data loading 
+    # Preps for K-Fold cross-validation
     attns_train, dists_train, attns_test, dists_test = merge_all_families()
     train_dataset = TensorDataset(attns_train, dists_train)
-    test_dataset = TensorDataset(attns_test, dists_test)
-
-    # Parameters from above
-    architecture = [1024, 512, 256, 128, 64, 32]
-    num_epochs = 200
-    learning_rate = 0.005
-    batch_size = 512
-
-    # Define the train/test loader
-    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size)
-    test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size)
     
-    # Define the model with given parameters
-    input_dim = attns_train.shape[1]
+    splits = KFold(n_splits=k_fold, shuffle=True, random_state=42)
+    
+    # Parameters from above
+    architecture = [512, 256, 128, 64, 32]
+    num_epochs = 100
+    learning_rate = 0.001
+    batch_size = 32
+
+    # Iterate over folds
+    for fold, (train_idx, fold_idx) in enumerate(splits.split(np.arange(len(train_dataset)))):
+        
+        # Generate train and fold split from this fold
+        train_samples = SubsetRandomSampler(train_idx)
+        fold_samples = SubsetRandomSampler(fold_idx)
+
+        # Track for this specfic fold split
+        train_loss_fold = []
+        evaluation_loss_fold = []
+        
+        # Create DataLoaders for these splits
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_samples)
+        fold_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=fold_samples)
+
+        # Define the model and optimizer - we need to train it again for each fold 
+        input_dim = attns_train.shape[1]
+        fcn = model_FCN.FullyConnectedNN(input_dim=input_dim, hidden_layers=architecture).to(device)
+        print(fcn)
+        optimizer = optim.Adam(fcn.parameters(), lr=learning_rate)
+        scheduler = ReduceLROnPlateau(optimizer, 'min', 0.5)
+        early_stopping = model_FCN.EarlyStopping(patience=15, delta=0.00005)
+        i = 0
+    
+        # Train model for number of epochs
+        for epoch in range(num_epochs):
+            i += 1
+            avg_train_loss = model_FCN.train_epoch(fcn, device, train_loader, optimizer)
+            avg_eval_loss, _, _ = model_FCN.evaluate(fcn, device, fold_loader)
+
+            # Add them to the respective lists for plotting
+            train_loss_fold.append(avg_train_loss)
+            evaluation_loss_fold.append(avg_eval_loss)
+            
+            #if epoch == (num_epoch - 1):
+            print(f"Epoch {epoch}/{num_epochs}: Train Loss {avg_train_loss:.4f} // Val Loss {avg_eval_loss:.4f}")
+
+            scheduler.step(avg_eval_loss)
+            early_stopping(avg_eval_loss, fcn)
+            if early_stopping.early_stop:
+                print("Early stopping")
+                break
+        
+        break
+
+        # Plotting loss - for overfitting
+        plt.figure(figsize=(6, 4))
+        plt.plot(np.arange(i), train_loss_fold, label='train loss')
+        plt.plot(np.arange(i), evaluation_loss_fold, label='val loss')
+        plt.title('Test and validation loss on Fold')
+        plt.xlabel('epoch')
+        plt.ylabel('loss')
+        plt.legend()
+        plt.save_fig('overfitting.png')
+
+        # Save the model
+        path = 'trained_model.pth'
+        torch.save(fcn.state_dict(), path)
+
+def evaluate_model(path, device='cpu'):
+    """ After we trained the model with best hyperparameters, we are going to evaluate it. """
+
+    # Do data loading 
+    _, _, attns_test, dists_test = merge_all_families()
+    test_dataset = TensorDataset(attns_test, dists_test)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size)
+
+    # Load the model
+    architecture = [512, 256, 128, 64, 32]
+    input_dim = attns_test.shape[1]
     fcn = model_FCN.FullyConnectedNN(input_dim=input_dim, hidden_layers=architecture).to(device)
-    optimizer = optim.Adam(fcn.parameters(), lr=learning_rate, weight_decay=0.001)
-
-    # Train the model on all data
-    for epoch in range(num_epochs):
-
-        avg_train_loss = model_FCN.train_epoch(fcn, device, train_loader, optimizer)
-        print(f"Epoch {epoch}/{epoch}: {avg_train_loss:.4f}")
+    fcn.load_state_dict(torch.load(path))
 
     # Test model
     avg_eval_loss, predictions, ground_truths = model_FCN.evaluate(fcn, device, test_loader)
@@ -291,11 +361,13 @@ def train_and_evaluate_model():
     plt.xlabel('Ground Truths')
     plt.ylabel('Predictions')
     plt.show()
+    plt.savefig('comparison.png')
         
 if __name__ == "__main__":
     
-    #train_and_evaluate_model()
-    perform_NN()
+    #perform_NN()
+    train_final_model()
+    evaluate_model('./trained_model.pth')
 
     
 
