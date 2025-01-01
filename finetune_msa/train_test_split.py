@@ -12,7 +12,6 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset, SubsetRandomSampler
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from torchsummary import summary
 
 from sklearn.model_selection import KFold
 import model_FCN 
