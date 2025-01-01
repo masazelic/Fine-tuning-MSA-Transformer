@@ -30,20 +30,6 @@ import torch
 from Bio import SeqIO
 from Bio import Phylo
 
-# This is an efficient way to delete lowercase characters and insertion characters from a string
-deletekeys = dict.fromkeys(string.ascii_lowercase) # Making dictionary where each lowercase ascii letter is key and value is set to None
-deletekeys["."] = None
-deletekeys["*"] = None
-translation = str.maketrans(deletekeys)
-
-def remove_insertions(sequence: str) -> str:
-    """ Removes any insertions into the sequences. Needed to load aligned sequences in an MSA."""
-    return sequence.translate(translation)
-
-def read_msa(filename: str, nseq: int) -> List[Tuple[str, str]]:
-    """ Reads the first nseq sequences from an MSA file in fasta format, automatically removes insertions."""
-    return [(record.description, remove_insertions(str(record.seq))) for record in itertools.islice(SeqIO.parse(filename, "fasta"), nseq)]
-
 def perform_regressions_msawise(pfam_families_train, approach, normalize_dists=False):
     """ Perfroms regression on all MSA sequences. """
     df = pd.DataFrame(columns=[f"lyr{i}_hd{j}" for i in range(n_layers) for j in range(n_heads)] + ["dist"], dtype=np.float64)
@@ -127,7 +113,7 @@ if __name__ == "__main__":
     MEDIUM_SIZE = 60
     BIGGER_SIZE = 70
     plt.rcParams.update({
-        "text.usetex": True,
+        "text.usetex": False,
         "font.family": "serif",
         "font.serif": ["times"],
         "font.size": MEDIUM_SIZE,
@@ -136,7 +122,7 @@ if __name__ == "__main__":
         "figure.titlesize": BIGGER_SIZE,
         "xtick.labelsize": MEDIUM_SIZE,
         "ytick.labelsize": MEDIUM_SIZE,
-        "legend.fontsize": MEDIUM_SIZE,
+        "legend.fontsize": MEDIUM_SIZE
     })
     
     # Setting random seed for fixed performance
