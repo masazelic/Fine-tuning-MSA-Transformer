@@ -355,7 +355,7 @@ def evaluate_model(path, device='cpu'):
 
     # Do some plots - scatter plot of true values compared to the predictions
     plt.figure(figsize=(6,4))
-    plt.plot(ground_truths_tens, predictions_tens)
+    plt.scatter(ground_truths_tens, predictions_tens)
     plt.title('Dependancy of ground truths and predictions - expecting linear curve')
     plt.xlabel('Ground Truths')
     plt.ylabel('Predictions')
@@ -365,7 +365,7 @@ def evaluate_model(path, device='cpu'):
 if __name__ == "__main__":
     
     #perform_NN()
-    train_final_model()
+    #train_final_model()
     evaluate_model('./trained_model.pth')
 
     
