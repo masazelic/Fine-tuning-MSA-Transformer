@@ -1,4 +1,5 @@
 import model_finetune
+import model_FCN
 import data_esm
 import data_bmdca
 import utils 
@@ -9,6 +10,7 @@ from argparse import ArgumentParser
 import pathlib
 import torch
 import torch.nn as nn
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 import peft 
 from tqdm import tqdm
 
@@ -136,6 +138,8 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
     peft_model = peft.get_peft_model(model, config)
     
     optimizer = torch.optim.Adam(peft_model.parameters(), lr=learning_rate)
+    scheduler = ReduceLROnPlateau(optimizer, 'min', 0.5)
+    early_stopping = model_FCN.EarlyStopping(patience=10, delta=0.0001)
     criterion = nn.MSELoss()
     
     # Train pipeline
@@ -160,6 +164,13 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
         peft_model.eval()
         avg_eval_loss = evaluate_epoch(peft_model, device, val_dataloader, len_val, criterion)
         print(f"Epoch {epoch}/{max_iters}: Train {avg_train_loss:.4f} // Val {avg_eval_loss:.4f}")
+
+        # Scheduler step and early stopping
+        scheduler.step(avg_eval_loss)
+        early_stopping(avg_eval_loss, peft_model)
+        if early_stopping.early_stop:
+            print("Early stopping")
+            break
     
     avg_eval_loss_fin = evaluate_epoch(peft_model, device, val_dataloader, criterion)
     print(f"Final validation loss: {avg_eval_loss_fin:.4f}")
