@@ -320,7 +320,7 @@ def train_final_model():
     plt.xlabel('epoch')
     plt.ylabel('loss')
     plt.legend()
-    plt.save_fig('overfitting.png')
+    plt.savefig('overfitting.png')
 
     # Save the model
     path = 'trained_model.pth'
