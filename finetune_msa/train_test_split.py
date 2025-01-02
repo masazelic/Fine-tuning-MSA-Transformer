@@ -30,7 +30,7 @@ ATTNS_FOLDER_SUBT = pathlib.Path(f"/content/drive/MyDrive/data/col_attentions_su
 pfam_families = ["PF00004", "PF00005", "PF00041", "PF00072", "PF00076", "PF00096", "PF00153", "PF00271", "PF00397", "PF00512", "PF00595", "PF01535", "PF02518", "PF07679", "PF13354"]
 
 # Setting random seed for fixed performance
-np.random.seed(42)
+np.random.seed(50)
 
 # Grid search parameters
 layer_structure = [[512, 256, 128, 64, 32]]
@@ -314,10 +314,10 @@ def train_final_model(train_indexes):
         plt.xlabel('epoch')
         plt.ylabel('loss')
         plt.legend()
-        plt.savefig('overfitting.png')
+        plt.savefig('overfitting1.png')
 
         # Save the model
-        path = 'trained_model.pth'
+        path = 'trained_model1.pth'
         torch.save(early_stopping.best_model_state, path)
         
         break
@@ -351,12 +351,12 @@ def evaluate_model(train_indexes, path, device='cpu'):
 
     # Do some plots - scatter plot of true values compared to the predictions
     plt.figure(figsize=(6,4))
-    plt.scatter(ground_truths_tens, predictions_tens)
+    plt.scatter(ground_truths_tens, predictions_tens, s=5)
     plt.title('Dependancy of ground truths and predictions - expecting linear curve')
     plt.xlabel('Ground Truths')
     plt.ylabel('Predictions')
     plt.show()
-    plt.savefig('comparison.png')
+    plt.savefig('comparison1.png')
         
 if __name__ == "__main__":
     
