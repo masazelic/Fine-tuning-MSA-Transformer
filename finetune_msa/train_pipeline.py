@@ -226,16 +226,16 @@ if __name__ == "__main__":
     parser.add_argument('-md', '--max_depth', action='store', dest='max_depth', default='600', help='Max depth MSA sequences from each family.')
     
     # MSAs folder for bmDCA
-    parser.add_argument('-mf', '--msas_folder', action='store', dest='msas_folder', default='/content/drive/MyDrive/data/subsampled_msa', help='MSAs folder path.')
+    parser.add_argument('-mf', '--msas_folder', action='store', dest='msas_folder', default='./subsampled_msa', help='MSAs folder path.')
     
     # Dists folder for bmDCA
-    parser.add_argument('-df', '--dists_folder', action='store', dest='dists_folder', default='/content/drive/MyDrive/data/distance_matrix', help='Distance matrices folder path.')
+    parser.add_argument('-df', '--dists_folder', action='store', dest='dists_folder', default='./distance_matrix', help='Distance matrices folder path.')
 
     # Checkpoint folder
     parser.add_argument('-cp', '--checkpoint_folder', action='store', dest='checkpoint_folder', default='./checkpoints', help='Folder that stores model checkpoints over training.')
 
     # Approach
-    parser.add_argument('-a', '--approach', action='store', dest='approach', default='esm', help='Tells which synthetic sequences to use. Can be ESM or bmDCA.')
+    parser.add_argument('-a', '--approach', action='store', dest='approach', default='bmDCA', help='Tells which synthetic sequences to use. Can be ESM or bmDCA.')
 
     # Folder where data for ESM is stored - assumes following folder structure
     # - Folder with data (argument)

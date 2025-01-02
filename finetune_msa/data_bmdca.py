@@ -10,7 +10,7 @@ from Bio import Phylo
 
 from torch.utils.data import IterableDataset, DataLoader    
 
-def train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_depth, msas_folder, dists_folder):
+def train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_depth, msas_folder, dists_folder, normalize_dists=True):
     """ Load sequences from all families with their respective distances and perfrom split on train and test set. 
     
     Args:
@@ -39,6 +39,10 @@ def train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_d
         # Load MSA and distances
         msa_family = utils.read_msa(msas_path_family, max_depth)
         dists_family = np.load(dists_path_family)
+
+        if normalize_dists:
+            dists_family = dists_family.astype(np.float64)
+            dists_family /= np.max(dists_family)
         
         # Select sequences that will go in train and test / set the seed for the reproduciblity 
         np.random.seed(42)
