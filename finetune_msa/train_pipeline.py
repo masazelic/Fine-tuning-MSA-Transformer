@@ -142,7 +142,7 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
     for epoch in range(max_iters):
 
         # In every iteration we need to load dataloader - because it is iterable
-        train_dataloader, val_dataloader, test_dataloader = data_bmdca.generate_dataloaders(train_data, val_data, test_data)
+        train_dataloader, val_dataloader, test_dataloader = data_bmdca.generate_dataloaders_bmDCA(train_data, val_data, test_data)
         
         # Set model to train mode
         peft_model.train()
