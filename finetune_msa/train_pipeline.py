@@ -15,7 +15,7 @@ from tqdm import tqdm
 # Defining some constants
 max_iters = 100
 batch_size = 32
-learning_rate = 0.005
+learning_rate = 0.001
 
 pfam_families = [
     "PF00004",
