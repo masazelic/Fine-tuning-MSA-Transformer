@@ -23,14 +23,14 @@ import matplotlib.pyplot as plt
 # IMPORTANT CONSTANTS
 
 MSAS_FOLDER = pathlib.Path("/content/drive/MyDrive/data/subsampled_msa")
-DISTS_FOLDER = pathlib.Path("./distance_matrix")
-ATTNS_FOLDER_RAND = pathlib.Path(f"./col_attentions_random")
+DISTS_FOLDER = pathlib.Path("/content/drive/MyDrive/data/distance_matrix")
+ATTNS_FOLDER_RAND = pathlib.Path(f"/content/drive/MyDrive/data/col_attentions_random")
 ATTNS_FOLDER_SUBT = pathlib.Path(f"/content/drive/MyDrive/data/col_attentions_subtree")
 
 pfam_families = ["PF00004", "PF00005", "PF00041", "PF00072", "PF00076", "PF00096", "PF00153", "PF00271", "PF00397", "PF00512", "PF00595", "PF01535", "PF02518", "PF07679", "PF13354"]
 
 # Setting random seed for fixed performance
-np.random.seed(50)
+np.random.seed(26)
 
 # Grid search parameters
 layer_structure = [[512, 256, 128, 64, 32]]
@@ -284,7 +284,7 @@ def train_final_model(train_indexes):
         print(fcn)
         optimizer = optim.Adam(fcn.parameters(), lr=learning_rate)
         scheduler = ReduceLROnPlateau(optimizer, 'min', 0.5)
-        early_stopping = model_FCN.EarlyStopping(patience=15, delta=0.00005)
+        early_stopping = model_FCN.EarlyStopping(patience=25, delta=0.00005)
         i = 0
     
         # Train model for number of epochs
@@ -314,10 +314,10 @@ def train_final_model(train_indexes):
         plt.xlabel('epoch')
         plt.ylabel('loss')
         plt.legend()
-        plt.savefig('overfitting1.png')
+        plt.savefig('overfitting4.png')
 
         # Save the model
-        path = 'trained_model1.pth'
+        path = 'trained_model4.pth'
         torch.save(early_stopping.best_model_state, path)
         
         break
@@ -343,8 +343,8 @@ def evaluate_model(train_indexes, path, device='cpu'):
     print(f"Loss on the test data is: {avg_eval_loss:.4f}")
 
     # Print the Rˆ2 value on the test data
-    predictions_tens = torch.cat(predictions, axis=0)
-    ground_truths_tens = torch.cat(ground_truths, axis=0)
+    predictions_tens = torch.cat(predictions, axis=0).detach().cpu().numpy()
+    ground_truths_tens = torch.cat(ground_truths, axis=0).detach().cpu().numpy()
     r_squared = metrics.r2_score(ground_truths_tens, predictions_tens)
 
     print(f"R2-score captured in the test data: {r_squared:.2f}")
@@ -356,14 +356,14 @@ def evaluate_model(train_indexes, path, device='cpu'):
     plt.xlabel('Ground Truths')
     plt.ylabel('Predictions')
     plt.show()
-    plt.savefig('comparison1.png')
+    plt.savefig('comparison4.png')
         
 if __name__ == "__main__":
     
     # We know all random MSAs are of length 100 and we choose 0.8*DEPTH and 15 MSAs families
     train_indexes = np.array([np.random.choice(100, 80, replace=False) for _ in range(15)])
     train_final_model(train_indexes)
-    evaluate_model(train_indexes, './trained_model.pth')
+    evaluate_model(train_indexes, '/content/drive/MyDrive/Fine-tuning-MSA-Transformer/Fine-tuning-MSA-Transformer/trained_model4.pth')
 
     
 
