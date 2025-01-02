@@ -2,6 +2,7 @@ import torch
 import string
 import re
 import itertools
+import numpy as np
 from Bio import SeqIO
 
 def get_target_save_modules(model):

@@ -23,28 +23,27 @@ import matplotlib.pyplot as plt
 # IMPORTANT CONSTANTS
 
 MSAS_FOLDER = pathlib.Path("/content/drive/MyDrive/data/subsampled_msa")
-DISTS_FOLDER = pathlib.Path("./distance_matrix")
-ATTNS_FOLDER_RAND = pathlib.Path(f"./col_attentions_random")
+DISTS_FOLDER = pathlib.Path("/content/drive/MyDrive/data/distance_matrix")
+ATTNS_FOLDER_RAND = pathlib.Path(f"/content/drive/MyDrive/data/col_attentions_random")
 ATTNS_FOLDER_SUBT = pathlib.Path(f"/content/drive/MyDrive/data/col_attentions_subtree")
 
 pfam_families = ["PF00004", "PF00005", "PF00041", "PF00072", "PF00076", "PF00096", "PF00153", "PF00271", "PF00397", "PF00512", "PF00595", "PF01535", "PF02518", "PF07679", "PF13354"]
 
 # Setting random seed for fixed performance
-SEED = 42
-rng = np.random.default_rng(SEED)
+np.random.seed(42)
 
 # Grid search parameters
 layer_structure = [[512, 256, 128, 64, 32]]
 learning_rates = [0.001]
 k_fold = 5
 batch_size = 32
-num_epochs = [500] 
+num_epochs = [5] 
 
 # Set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # ==================================================================================================
 
-def create_train_test_sets_per_family(attns, dists, normalize_dists=False, train_size=0.8, ensure_same_size=False, zero_attention_diagonal=False):
+def create_train_test_sets_per_family(attns, dists, train_idx, normalize_dists=False, train_size=0.8, ensure_same_size=False, zero_attention_diagonal=False):
     """ Attentions assumed averaged across column dimensions, i.e. 4D tensors. """
     if zero_attention_diagonal:
         attns[:, :, np.arange(attns.shape[2]), np.arange(attns.shape[2])] = 0
@@ -63,10 +62,7 @@ def create_train_test_sets_per_family(attns, dists, normalize_dists=False, train
     n_layers, n_heads, depth, _ = attns.shape
     
     # Train-test split
-    n_train = int(depth * train_size)
-    
-    # Without replacement choose random 70% of MSA depth and create a mask to select training sequences
-    train_idx = rng.choice(depth, size=n_train, replace=False)
+    print(train_idx)
     split_mask = np.zeros(depth, dtype=bool)
     split_mask[train_idx] = True
         
@@ -187,7 +183,7 @@ def hyperparameter_tuning(attns_train, dists_train, layer_structure, learning_ra
     print("Best classifier achitecture: ", best_layer_structure)
     print("Best learning rate: ", best_lr)
 
-def merge_all_families(normalize_dists=True, ensure_same_size=False, zero_attention_diagonal=False):
+def merge_all_families(train_indexes, normalize_dists=True, ensure_same_size=False, zero_attention_diagonal=False):
     """ For loading all the families. """
 
     attns_train_random = []
@@ -195,14 +191,14 @@ def merge_all_families(normalize_dists=True, ensure_same_size=False, zero_attent
     dists_train_random = []
     dists_test_random = []
 
-    for pfam_family in pfam_families:
+    for i, pfam_family in enumerate(pfam_families):
         
         # Load path to the specific column attentions and distances
         dists_random = np.load(DISTS_FOLDER / f"{pfam_family}_random.npy")
         attns_random = np.load(ATTNS_FOLDER_RAND / f"{pfam_family}_random_mean_on_cols_symm.npy")
 
         # Load data
-        ((attns_train_r, dists_train_r), (attns_test_r, dists_test_r), (n_rows_train_r, n_rows_test_r)) = create_train_test_sets_per_family(attns_random, dists_random, normalize_dists=normalize_dists, ensure_same_size=ensure_same_size, zero_attention_diagonal=zero_attention_diagonal)
+        ((attns_train_r, dists_train_r), (attns_test_r, dists_test_r), (n_rows_train_r, n_rows_test_r)) = create_train_test_sets_per_family(attns_random, dists_random, train_indexes[i], normalize_dists=normalize_dists, ensure_same_size=ensure_same_size, zero_attention_diagonal=zero_attention_diagonal)
         
         # Convert to torch tensor
         attns_train_r = torch.tensor(attns_train_r)
@@ -252,11 +248,11 @@ def perform_NN(normalize_dists=True, ensure_same_size=False, zero_attention_diag
     # Tune hyperparameters
     hyperparameter_tuning(attns_train, dists_train, layer_structure, learning_rates, num_epochs, batch_size, k_fold, device)
 
-def train_final_model():
+def train_final_model(train_indexes):
     """ After cross-validation with hyperparameter tuning we are training the model. """
 
     # Preps for K-Fold cross-validation
-    attns_train, dists_train, attns_test, dists_test = merge_all_families()
+    attns_train, dists_train, attns_test, dists_test = merge_all_families(train_indexes)
     train_dataset = TensorDataset(attns_train, dists_train)
     
     splits = KFold(n_splits=k_fold, shuffle=True, random_state=42)
@@ -310,27 +306,27 @@ def train_final_model():
                 print("Early stopping")
                 break
         
+        # Plotting loss - for overfitting
+        plt.figure(figsize=(6, 4))
+        plt.plot(np.arange(i), train_loss_fold, label='train loss')
+        plt.plot(np.arange(i), evaluation_loss_fold, label='val loss')
+        plt.title('Test and validation loss on Fold')
+        plt.xlabel('epoch')
+        plt.ylabel('loss')
+        plt.legend()
+        plt.savefig('overfitting.png')
+
+        # Save the model
+        path = 'trained_model.pth'
+        torch.save(early_stopping.best_model_state, path)
+        
         break
 
-    # Plotting loss - for overfitting
-    plt.figure(figsize=(6, 4))
-    plt.plot(np.arange(i), train_loss_fold, label='train loss')
-    plt.plot(np.arange(i), evaluation_loss_fold, label='val loss')
-    plt.title('Test and validation loss on Fold')
-    plt.xlabel('epoch')
-    plt.ylabel('loss')
-    plt.legend()
-    plt.savefig('overfitting.png')
-
-    # Save the model
-    path = 'trained_model.pth'
-    torch.save(fcn.state_dict(), path)
-
-def evaluate_model(path, device='cpu'):
+def evaluate_model(train_indexes, path, device='cpu'):
     """ After we trained the model with best hyperparameters, we are going to evaluate it. """
 
     # Do data loading 
-    _, _, attns_test, dists_test = merge_all_families()
+    _, _, attns_test, dists_test = merge_all_families(train_indexes)
     test_dataset = TensorDataset(attns_test, dists_test)
     test_loader = DataLoader(test_dataset, batch_size=batch_size)
 
@@ -364,9 +360,10 @@ def evaluate_model(path, device='cpu'):
         
 if __name__ == "__main__":
     
-    #perform_NN()
-    #train_final_model()
-    evaluate_model('./trained_model.pth')
+    # We know all random MSAs are of length 100 and we choose 0.8*DEPTH and 15 MSAs families
+    train_indexes = np.array([np.random.choice(100, 80, replace=False) for _ in range(15)])
+    train_final_model(train_indexes)
+    evaluate_model(train_indexes, './trained_model.pth')
 
     
 
