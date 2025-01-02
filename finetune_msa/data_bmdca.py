@@ -2,6 +2,7 @@ import os
 import string
 import torch
 import random
+import math
 import numpy as np
 import pathlib
 import utils
@@ -10,7 +11,7 @@ from Bio import Phylo
 
 from torch.utils.data import IterableDataset, DataLoader    
 
-def train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_depth, msas_folder, dists_folder, normalize_dists=True):
+def train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_depth, msas_folder, dists_folder, batch_size=32, normalize_dists=True):
     """ Load sequences from all families with their respective distances and perfrom split on train and test set. 
     
     Args:
@@ -30,6 +31,9 @@ def train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_d
     val_data = {}
     test_data = {}
     
+    len_train = 0
+    len_val = 0
+    len_test = 0
     
     for family in pfam_families:
         
@@ -77,8 +81,13 @@ def train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_d
         train_data[family] = (msa_train_family, dists_train_family)
         val_data[family] = (msa_val_family, dists_val_family)
         test_data[family] = (msa_test_family, dists_test_family)
+
+        # Add lengths for tqdm
+        len_train += math.ceil(len(train_indices) / batch_size)
+        len_val += math.ceil(len(val_indices) / batch_size)
+        len_test += math.ceil(len(test_indices) / batch_size)
         
-    return train_data, val_data, test_data
+    return train_data, len_train, val_data, len_val, test_data, len_test
 
 def generate_dataloaders_bmDCA(train_data, val_data, test_data):
     """

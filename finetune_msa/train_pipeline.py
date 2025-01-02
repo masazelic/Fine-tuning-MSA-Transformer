@@ -126,7 +126,7 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
     checkpoint_folder = checkpoint_folder / f"{approach}_folder"
 
     # Define the data - train, val, test splits 
-    train_data, val_data, test_data = data_bmdca.train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_depth, msas_folder, dists_folder)
+    train_data, len_train, val_data, len_val, test_data, len_test = data_bmdca.train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_depth, msas_folder, dists_folder)
 
     # Define Model, Model LoRA, optimizer, loss function
     model = model_finetune.FineTuneMSATransformer().to(device)
@@ -148,7 +148,7 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
         peft_model.train()
         
         # Train
-        avg_train_loss = train_epoch(peft_model, device, train_dataloader, optimizer, criterion)
+        avg_train_loss = train_epoch(peft_model, device, train_dataloader, len_train, optimizer, criterion)
 
         # Save model checkpoint if certain number of epochs is reached
         if (epoch % 100 == 0) and (epoch != 0) :
@@ -158,7 +158,7 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
         
         # Evaluate the model on the validation subset
         peft_model.eval()
-        avg_eval_loss = evaluate_epoch(peft_model, device, val_dataloader, criterion)
+        avg_eval_loss = evaluate_epoch(peft_model, device, val_dataloader, len_val, criterion)
         print(f"Epoch {epoch}/{max_iters}: Train {avg_train_loss:.4f} // Val {avg_eval_loss:.4f}")
     
     avg_eval_loss_fin = evaluate_epoch(peft_model, device, val_dataloader, criterion)
