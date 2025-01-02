@@ -13,7 +13,7 @@ class FineTuneMSATransformer(nn.Module):
         dropout_p (float): Dropout probability for regularization.
         activation (callable): The activation function to apply after each hidden layer.
     """
-    def __init__(self, input_dim=144, architecture=[8,16,8], output_dim=1, dropout_p=0.2):
+    def __init__(self, input_dim=144, architecture=[256,128,64], output_dim=1, dropout=0.0):
         
         super().__init__()
         
