@@ -20,7 +20,7 @@ from sklearn import metrics
 # Defining some constants
 max_iters = 100
 batch_size = 32
-learning_rate = 0.00005
+learning_rate = 0.0001
 
 pfam_families = [
     "PF00004",
