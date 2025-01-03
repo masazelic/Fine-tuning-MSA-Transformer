@@ -161,12 +161,12 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
         
         # Train
         avg_train_loss = train_epoch(peft_model, device, train_dataloader, len_train, optimizer, criterion)
-        train_loss.append(avg_train_loss)
+        train_loss.append(avg_train_loss.cpu().numpy())
         
         # Evaluate the model on the validation subset
         peft_model.eval()
         avg_eval_loss = evaluate_epoch(peft_model, device, val_dataloader, len_val, criterion)
-        val_loss.append(avg_eval_loss)
+        val_loss.append(avg_eval_loss.cpu().numpy())
         print(f"Epoch {epoch}/{max_iters}: Train {avg_train_loss:.4f} // Val {avg_eval_loss:.4f}")
 
         # Scheduler step and early stopping
@@ -178,8 +178,8 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
     
     # Plot loss curves
     plt.figure(figsize=(6, 4))
-    plt.plot(np.arange(i), train_loss.cpu().numpy(), label='train loss')
-    plt.plot(np.arange(i), val_loss.cpu().numpy(), label='val loss')
+    plt.plot(np.arange(i), train_loss, label='train loss')
+    plt.plot(np.arange(i), val_loss, label='val loss')
     plt.title('Train and validation loss on Fold')
     plt.xlabel('epoch')
     plt.ylabel('loss')
