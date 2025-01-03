@@ -21,6 +21,7 @@ from sklearn import metrics
 max_iters = 100
 batch_size = 32
 learning_rate = 0.0001
+r = 16
 
 pfam_families = [
     "PF00004",
@@ -130,7 +131,7 @@ def evaluate_epoch(model, device, dataloader, len_val, criterion):
     
     return val_loss / num_batches, store_predictions, store_ground_truths
 
-def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, msas_folder, dists_folder, checkpoint_folder, approach):
+def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach):
     """ Function that does model training for the case of synthetic sequences generated with bmDCA. """
     
     # Save train and validation loss
@@ -148,7 +149,7 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
     model = model_finetune.FineTuneMSATransformer().to(device)
     store_target_modules, store_modules_to_save = utils.get_target_save_modules(model)
     
-    config = peft.LoraConfig(r=16, target_modules=store_target_modules, modules_to_save=store_modules_to_save)
+    config = peft.LoraConfig(r=r, target_modules=store_target_modules, modules_to_save=store_modules_to_save)
     peft_model = peft.get_peft_model(model, config)
     
     optimizer = torch.optim.Adam(peft_model.parameters(), lr=learning_rate)
@@ -197,7 +198,7 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
     final_model = model_finetune.FineTuneMSATransformer().to(device)
     store_target_modules, store_modules_to_save = utils.get_target_save_modules(final_model)
     
-    config = peft.LoraConfig(r=8, target_modules=store_target_modules, modules_to_save=store_modules_to_save)
+    config = peft.LoraConfig(r=r, target_modules=store_target_modules, modules_to_save=store_modules_to_save)
     final_peft_model = peft.get_peft_model(final_model, config)
 
     final_peft_model.load_state_dict(early_stopping.best_model_state)
@@ -217,7 +218,7 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
     # Save model
     torch.save(early_stopping.best_model_state, checkpoint_folder)
 
-def test_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, msas_folder, dists_folder, checkpoint_folder, approach):
+def test_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach):
     """ Function that does model training for the case of synthetic sequences generated with bmDCA. """
 
     # Checkpoint path - define with the respect to the approach
@@ -230,7 +231,7 @@ def test_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters
     model = model_finetune.FineTuneMSATransformer().to(device)
     store_target_modules, store_modules_to_save = utils.get_target_save_modules(model)
     
-    config = peft.LoraConfig(r=8, target_modules=store_target_modules, modules_to_save=store_modules_to_save)
+    config = peft.LoraConfig(r=r, target_modules=store_target_modules, modules_to_save=store_modules_to_save)
     peft_model = peft.get_peft_model(model, config)
     peft_model.load_state_dict(torch.load(checkpoint_folder))
 
@@ -353,8 +354,8 @@ if __name__ == "__main__":
     esm_folder = pathlib.Path(args.esm_folder)
 
     if approach == "bmDCA":
-        train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, msas_folder, dists_folder, checkpoint_folder, approach)
-        test_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, msas_folder, dists_folder, checkpoint_folder, approach)
+        train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach)
+        test_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach)
     
     if approach == "esm":
         train_model_esm(esm_folder, max_iters, checkpoint_folder, approach)
