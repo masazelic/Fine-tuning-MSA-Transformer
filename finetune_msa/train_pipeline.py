@@ -17,7 +17,7 @@ from tqdm import tqdm
 # Defining some constants
 max_iters = 100
 batch_size = 32
-learning_rate = 0.001
+learning_rate = 0.0005
 
 pfam_families = [
     "PF00004",
@@ -138,8 +138,8 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
     peft_model = peft.get_peft_model(model, config)
     
     optimizer = torch.optim.Adam(peft_model.parameters(), lr=learning_rate)
-    scheduler = ReduceLROnPlateau(optimizer, 'min', 0.5)
-    early_stopping = model_FCN.EarlyStopping(patience=10, delta=0.0001)
+    #scheduler = ReduceLROnPlateau(optimizer, 'min', 0.5)
+    #early_stopping = model_FCN.EarlyStopping(patience=10, delta=0.0001)
     criterion = nn.MSELoss()
     
     # Train pipeline
@@ -166,11 +166,11 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
         print(f"Epoch {epoch}/{max_iters}: Train {avg_train_loss:.4f} // Val {avg_eval_loss:.4f}")
 
         # Scheduler step and early stopping
-        scheduler.step(avg_eval_loss)
-        early_stopping(avg_eval_loss, peft_model)
-        if early_stopping.early_stop:
-            print("Early stopping")
-            break
+        #scheduler.step(avg_eval_loss)
+        #early_stopping(avg_eval_loss, peft_model)
+        #if early_stopping.early_stop:
+            #print("Early stopping")
+            #break
     
     avg_eval_loss_fin = evaluate_epoch(peft_model, device, val_dataloader, criterion)
     print(f"Final validation loss: {avg_eval_loss_fin:.4f}")
