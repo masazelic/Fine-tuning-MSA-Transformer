@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import peft 
 from tqdm import tqdm
+from sklearn import metrics
 
 # Defining some constants
 max_iters = 100
@@ -101,7 +102,10 @@ def evaluate_epoch(model, device, dataloader, len_val, criterion):
     
     val_loss = 0.0
     num_batches = 0
-    
+    model.eval()
+    store_predictions = []
+    store_ground_truths = []
+
     # Iterate over all batches
     for batch in tqdm(dataloader, total=len_val):
         
@@ -118,10 +122,13 @@ def evaluate_epoch(model, device, dataloader, len_val, criterion):
             predictions = model(msa_batch_tokens, len(batch_seq)).squeeze(-1)
             loss = criterion(predictions, batch_dists)
             val_loss += loss.detach().float()
+
+            store_predictions.append(predictions)
+            store_ground_truths.append(batch_dists)
             
         num_batches += 1
     
-    return val_loss / num_batches
+    return val_loss / num_batches, store_predictions, store_ground_truths
 
 def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, msas_folder, dists_folder, checkpoint_folder, approach):
     """ Function that does model training for the case of synthetic sequences generated with bmDCA. """
@@ -165,7 +172,7 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
         
         # Evaluate the model on the validation subset
         peft_model.eval()
-        avg_eval_loss = evaluate_epoch(peft_model, device, val_dataloader, len_val, criterion)
+        avg_eval_loss, _, _ = evaluate_epoch(peft_model, device, val_dataloader, len_val, criterion)
         val_loss.append(avg_eval_loss.cpu().numpy())
         print(f"Epoch {epoch}/{max_iters}: Train {avg_train_loss:.4f} // Val {avg_eval_loss:.4f}")
 
@@ -197,11 +204,59 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
 
     # Evaluate final model
     _, val_dataloader, _ = data_bmdca.generate_dataloaders_bmDCA(train_data, val_data, test_data)
-    avg_eval_loss_fin = evaluate_epoch(final_peft_model, device, val_dataloader, len_val, criterion)
+    avg_eval_loss_fin, predictions, ground_truths = evaluate_epoch(final_peft_model, device, val_dataloader, len_val, criterion)
     print(f"Final validation loss: {avg_eval_loss_fin:.4f}")
+
+    # Print the Rˆ2 value on the val data
+    predictions_tens = torch.cat(predictions, axis=0).detach().cpu().numpy()
+    ground_truths_tens = torch.cat(ground_truths, axis=0).detach().cpu().numpy()
+    r_squared = metrics.r2_score(ground_truths_tens, predictions_tens)
+
+    print(f"R2-score captured in the test data: {r_squared:.2f}")
 
     # Save model
     torch.save(early_stopping.best_model_state, checkpoint_folder)
+
+def test_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, msas_folder, dists_folder, checkpoint_folder, approach):
+    """ Function that does model training for the case of synthetic sequences generated with bmDCA. """
+
+    # Checkpoint path - define with the respect to the approach
+    checkpoint_folder = checkpoint_folder / f"{approach}_model.pth"
+
+    # Define the data - train, val, test splits 
+    train_data, _, val_data, _, test_data, len_test = data_bmdca.train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_depth, msas_folder, dists_folder)
+
+    # Define Model, Model LoRA, optimizer, loss function
+    model = model_finetune.FineTuneMSATransformer().to(device)
+    store_target_modules, store_modules_to_save = utils.get_target_save_modules(model)
+    
+    config = peft.LoraConfig(r=8, target_modules=store_target_modules, modules_to_save=store_modules_to_save)
+    peft_model = peft.get_peft_model(model, config)
+    peft_model.load_state_dict(torch.load(checkpoint_folder))
+
+    criterion = nn.MSELoss()
+
+    # Test model
+    _, _, test_dataloader = data_bmdca.generate_dataloaders_bmDCA(train_data, val_data, test_data)
+    avg_eval_loss_fin, predictions, ground_truths = evaluate_epoch(peft_model, device, test_dataloader, len_test, criterion)
+    print(f"Final validation loss: {avg_eval_loss_fin:.4f}")
+
+    # Print the Rˆ2 value on the test data
+    predictions_tens = torch.cat(predictions, axis=0).detach().cpu().numpy()
+    ground_truths_tens = torch.cat(ground_truths, axis=0).detach().cpu().numpy()
+    r_squared = metrics.r2_score(ground_truths_tens, predictions_tens)
+
+    print(f"R2-score captured in the test data: {r_squared:.2f}")
+
+    # Plot
+    plt.figure(figsize=(6,4))
+    plt.scatter(ground_truths_tens, predictions_tens, s=5)
+    plt.title('Dependancy of ground truths and predictions - expecting linear curve')
+    plt.xlabel('Ground Truths')
+    plt.ylabel('Predictions')
+    plt.show()
+    plt.savefig('comparison.png')
+
 
 def train_model_esm(esm_folder, max_iters, checkpoint_folder, approach):
     " Function that does model training for the case of synthetic sequences generated with ESM. "
@@ -298,7 +353,8 @@ if __name__ == "__main__":
     esm_folder = pathlib.Path(args.esm_folder)
 
     if approach == "bmDCA":
-        train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, msas_folder, dists_folder, checkpoint_folder, approach)
+        #train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, msas_folder, dists_folder, checkpoint_folder, approach)
+        test_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, msas_folder, dists_folder, checkpoint_folder, approach)
     
     if approach == "esm":
         train_model_esm(esm_folder, max_iters, checkpoint_folder, approach)
