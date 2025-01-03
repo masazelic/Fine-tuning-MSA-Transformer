@@ -10,6 +10,8 @@ from argparse import ArgumentParser
 import pathlib
 import torch
 import torch.nn as nn
+import numpy as np
+import matplotlib.pyplot as plt
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import peft 
 from tqdm import tqdm
@@ -17,7 +19,7 @@ from tqdm import tqdm
 # Defining some constants
 max_iters = 100
 batch_size = 32
-learning_rate = 0.0005
+learning_rate = 0.0001
 
 pfam_families = [
     "PF00004",
@@ -124,8 +126,13 @@ def evaluate_epoch(model, device, dataloader, len_val, criterion):
 def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, msas_folder, dists_folder, checkpoint_folder, approach):
     """ Function that does model training for the case of synthetic sequences generated with bmDCA. """
     
+    # Save train and validation loss
+    train_loss = []
+    val_loss = []
+    i = 0
+
     # Checkpoint path - define with the respect to the approach
-    checkpoint_folder = checkpoint_folder / f"{approach}_folder"
+    checkpoint_folder = checkpoint_folder / f"{approach}_model.pth"
 
     # Define the data - train, val, test splits 
     train_data, len_train, val_data, len_val, test_data, len_test = data_bmdca.train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_depth, msas_folder, dists_folder)
@@ -138,14 +145,15 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
     peft_model = peft.get_peft_model(model, config)
     
     optimizer = torch.optim.Adam(peft_model.parameters(), lr=learning_rate)
-    #scheduler = ReduceLROnPlateau(optimizer, 'min', 0.5)
-    #early_stopping = model_FCN.EarlyStopping(patience=10, delta=0.0001)
+    scheduler = ReduceLROnPlateau(optimizer, 'min', 0.9)
+    early_stopping = model_FCN.EarlyStopping(patience=10, delta=0.0001)
     criterion = nn.MSELoss()
     
     # Train pipeline
     for epoch in range(max_iters):
 
         # In every iteration we need to load dataloader - because it is iterable
+        i += 1
         train_dataloader, val_dataloader, test_dataloader = data_bmdca.generate_dataloaders_bmDCA(train_data, val_data, test_data)
         
         # Set model to train mode
@@ -153,27 +161,44 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
         
         # Train
         avg_train_loss = train_epoch(peft_model, device, train_dataloader, len_train, optimizer, criterion)
-
-        # Save model checkpoint if certain number of epochs is reached
-        if (epoch % 100 == 0) and (epoch != 0) :
-            path = checkpoint_folder / f"checkpoint_{epoch}.pt"
-            torch.save({'epoch': epoch, 'model_state_dict': peft_model.state_dict(), 'optimizer_state_dict': optimizer.state_dict(),
-            'loss': avg_train_loss}, path)
+        train_loss.append(avg_train_loss)
         
         # Evaluate the model on the validation subset
         peft_model.eval()
         avg_eval_loss = evaluate_epoch(peft_model, device, val_dataloader, len_val, criterion)
+        val_loss.append(avg_eval_loss)
         print(f"Epoch {epoch}/{max_iters}: Train {avg_train_loss:.4f} // Val {avg_eval_loss:.4f}")
 
         # Scheduler step and early stopping
-        #scheduler.step(avg_eval_loss)
-        #early_stopping(avg_eval_loss, peft_model)
-        #if early_stopping.early_stop:
-            #print("Early stopping")
-            #break
+        scheduler.step(avg_eval_loss)
+        early_stopping(avg_eval_loss, peft_model)
+        if early_stopping.early_stop:
+            print("Early stopping")
+            break
     
-    avg_eval_loss_fin = evaluate_epoch(peft_model, device, val_dataloader, criterion)
+    # Plot loss curves
+    plt.figure(figsize=(6, 4))
+    plt.plot(np.arange(i), train_loss, label='train loss')
+    plt.plot(np.arange(i), val_loss, label='val loss')
+    plt.title('Train and validation loss on Fold')
+    plt.xlabel('epoch')
+    plt.ylabel('loss')
+    plt.legend()
+    plt.savefig('overfitting.png')
+
+    # Define Final Model, Model LoRA, optimizer, loss function
+    final_model = model_finetune.FineTuneMSATransformer().to(device)
+    store_target_modules, store_modules_to_save = utils.get_target_save_modules(final_model)
+    
+    config = peft.LoraConfig(r=8, target_modules=store_target_modules, modules_to_save=store_modules_to_save)
+    final_peft_model = peft.get_peft_model(final_model, config)
+
+    final_peft_model.load_state_dict(early_stopping.best_model_state)
+    avg_eval_loss_fin = evaluate_epoch(final_peft_model, device, val_dataloader, len_val, criterion)
     print(f"Final validation loss: {avg_eval_loss_fin:.4f}")
+
+    # Save model
+    torch.save(early_stopping.best_model_state, checkpoint_folder)
 
 def train_model_esm(esm_folder, max_iters, checkpoint_folder, approach):
     " Function that does model training for the case of synthetic sequences generated with ESM. "
