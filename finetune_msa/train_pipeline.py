@@ -178,8 +178,8 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
     
     # Plot loss curves
     plt.figure(figsize=(6, 4))
-    plt.plot(np.arange(i), train_loss, label='train loss')
-    plt.plot(np.arange(i), val_loss, label='val loss')
+    plt.plot(np.arange(i), train_loss.cpu().numpy(), label='train loss')
+    plt.plot(np.arange(i), val_loss.cpu().numpy(), label='val loss')
     plt.title('Train and validation loss on Fold')
     plt.xlabel('epoch')
     plt.ylabel('loss')
