@@ -194,6 +194,9 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
     final_peft_model = peft.get_peft_model(final_model, config)
 
     final_peft_model.load_state_dict(early_stopping.best_model_state)
+
+    # Evaluate final model
+    _, val_dataloader, _ = data_bmdca.generate_dataloaders_bmDCA(train_data, val_data, test_data)
     avg_eval_loss_fin = evaluate_epoch(final_peft_model, device, val_dataloader, len_val, criterion)
     print(f"Final validation loss: {avg_eval_loss_fin:.4f}")
 
