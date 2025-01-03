@@ -20,7 +20,7 @@ from sklearn import metrics
 # Defining some constants
 max_iters = 100
 batch_size = 32
-learning_rate = 0.0001
+learning_rate = 0.00005
 
 pfam_families = [
     "PF00004",
@@ -353,7 +353,7 @@ if __name__ == "__main__":
     esm_folder = pathlib.Path(args.esm_folder)
 
     if approach == "bmDCA":
-        #train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, msas_folder, dists_folder, checkpoint_folder, approach)
+        train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, msas_folder, dists_folder, checkpoint_folder, approach)
         test_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, msas_folder, dists_folder, checkpoint_folder, approach)
     
     if approach == "esm":
