@@ -148,7 +148,7 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
     model = model_finetune.FineTuneMSATransformer().to(device)
     store_target_modules, store_modules_to_save = utils.get_target_save_modules(model)
     
-    config = peft.LoraConfig(r=8, target_modules=store_target_modules, modules_to_save=store_modules_to_save)
+    config = peft.LoraConfig(r=16, target_modules=store_target_modules, modules_to_save=store_modules_to_save)
     peft_model = peft.get_peft_model(model, config)
     
     optimizer = torch.optim.Adam(peft_model.parameters(), lr=learning_rate)
