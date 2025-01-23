@@ -13,12 +13,13 @@ import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-import peft 
+import peft
+import random
 from tqdm import tqdm
 from sklearn import metrics
 
 # Defining some constants
-max_iters = 100
+max_iters = 20
 batch_size = 32
 learning_rate = 0.0001
 r = 16
@@ -131,7 +132,7 @@ def evaluate_epoch(model, device, dataloader, len_val, criterion):
     
     return val_loss / num_batches, store_predictions, store_ground_truths
 
-def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach):
+def train_model(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach, esm_folder):
     """ Function that does model training for the case of synthetic sequences generated with bmDCA. """
     
     # Save train and validation loss
@@ -143,7 +144,8 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
     checkpoint_folder = checkpoint_folder / f"{approach}_model.pth"
 
     # Define the data - train, val, test splits 
-    train_data, len_train, val_data, len_val, test_data, len_test = data_bmdca.train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_depth, msas_folder, dists_folder)
+    if approach == 'bmDCA':
+        train_data, len_train, val_data, len_val, test_data, len_test = data_bmdca.train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_depth, msas_folder, dists_folder)
 
     # Define Model, Model LoRA, optimizer, loss function
     model = model_finetune.FineTuneMSATransformer().to(device)
@@ -154,7 +156,7 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
     
     optimizer = torch.optim.Adam(peft_model.parameters(), lr=learning_rate)
     scheduler = ReduceLROnPlateau(optimizer, 'min', 0.9)
-    early_stopping = model_FCN.EarlyStopping(patience=10, delta=0.0001)
+    early_stopping = model_FCN.EarlyStopping(patience=5, delta=0.0001)
     criterion = nn.MSELoss()
     
     # Train pipeline
@@ -162,7 +164,10 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
 
         # In every iteration we need to load dataloader - because it is iterable
         i += 1
-        train_dataloader, val_dataloader, test_dataloader = data_bmdca.generate_dataloaders_bmDCA(train_data, val_data, test_data)
+        if approach == 'bmDCA':
+            train_dataloader, val_dataloader, test_dataloader = data_bmdca.generate_dataloaders_bmDCA(train_data, val_data, test_data)
+        else:
+            train_dataloader, len_train, val_dataloader, len_val = data_esm.load_train_val(esm_folder)
         
         # Set model to train mode
         peft_model.train()
@@ -204,7 +209,11 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
     final_peft_model.load_state_dict(early_stopping.best_model_state)
 
     # Evaluate final model
-    _, val_dataloader, _ = data_bmdca.generate_dataloaders_bmDCA(train_data, val_data, test_data)
+    if approach == 'bmDCA':
+        _, val_dataloader, _ = data_bmdca.generate_dataloaders_bmDCA(train_data, val_data, test_data)
+    else:
+        _, _, val_dataloader, len_val = data_esm.load_train_val(esm_folder)
+
     avg_eval_loss_fin, predictions, ground_truths = evaluate_epoch(final_peft_model, device, val_dataloader, len_val, criterion)
     print(f"Final validation loss: {avg_eval_loss_fin:.4f}")
 
@@ -218,14 +227,16 @@ def train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iter
     # Save model
     torch.save(early_stopping.best_model_state, checkpoint_folder)
 
-def test_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach):
+def test_model(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach, esm_folder):
     """ Function that does model training for the case of synthetic sequences generated with bmDCA. """
 
     # Checkpoint path - define with the respect to the approach
     checkpoint_folder = checkpoint_folder / f"{approach}_model.pth"
 
     # Define the data - train, val, test splits 
-    train_data, _, val_data, _, test_data, len_test = data_bmdca.train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_depth, msas_folder, dists_folder)
+    if approach == 'bmDCA':
+        train_data, _, val_data, _, test_data, len_test = data_bmdca.train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_depth, msas_folder, dists_folder)
+    
 
     # Define Model, Model LoRA, optimizer, loss function
     model = model_finetune.FineTuneMSATransformer().to(device)
@@ -234,11 +245,17 @@ def test_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters
     config = peft.LoraConfig(r=r, target_modules=store_target_modules, modules_to_save=store_modules_to_save)
     peft_model = peft.get_peft_model(model, config)
     peft_model.load_state_dict(torch.load(checkpoint_folder))
-
+    
+    total_params = sum(p.numel() for p in peft_model.parameters() if p.requires_grad)
+    print(f"Number of parameters: {total_params}")
     criterion = nn.MSELoss()
 
     # Test model
-    _, _, test_dataloader = data_bmdca.generate_dataloaders_bmDCA(train_data, val_data, test_data)
+    if approach == 'bmDCA':
+        _, _, test_dataloader = data_bmdca.generate_dataloaders_bmDCA(train_data, val_data, test_data)
+    else:
+        test_dataloader, len_test = data_esm.load_test(esm_folder)
+
     avg_eval_loss_fin, predictions, ground_truths = evaluate_epoch(peft_model, device, test_dataloader, len_test, criterion)
     print(f"Final validation loss: {avg_eval_loss_fin:.4f}")
 
@@ -258,54 +275,7 @@ def test_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters
     plt.show()
     plt.savefig('comparison.png')
 
-
-def train_model_esm(esm_folder, max_iters, checkpoint_folder, approach):
-    " Function that does model training for the case of synthetic sequences generated with ESM. "
-
-    # Checkpoint path - define with the respect to the approach
-    # checkpoint_folder = checkpoint_folder / f"{approach}_folder"
-
-    # Load data (we have predefined train, val, test splits)
-
-    train_dict = data_esm.read_pickle(esm_folder / "train.pkl")
-    val_dict = data_esm.read_pickle(esm_folder / "val.pkl")    
-
-    train_dataloader, len_train = data_esm.generate_dataloader_esm(train_dict)
-    val_dataloader, len_val = data_esm.generate_dataloader_esm(val_dict)
-
-    # Define Model, Model LoRA, optimizer, loss function
-    model = model_finetune.FineTuneMSATransformer().to(device)
-    store_target_modules, store_modules_to_save = utils.get_target_save_modules(model)
-
-    config = peft.LoraConfig(r=8, target_modules=store_target_modules, modules_to_save=store_modules_to_save)
-    peft_model = peft.get_peft_model(model, config)
-    
-    optimizer = torch.optim.Adam(peft_model.parameters(), lr=learning_rate)
-    criterion = nn.MSELoss()
-
-    # Train pipeline
-    for epoch in range(max_iters):
-
-        # Set model to train mode
-        peft_model.train()
-        
-        # Train
-        avg_train_loss = train_epoch(peft_model, device, train_dataloader, len_train, optimizer, criterion)
-
-        # Save model checkpoint if certain number of epochs is reached
-        if (epoch % 20 == 0) and (epoch != 0) :
-            path = checkpoint_folder / f"checkpoint_{epoch}.pt"
-            torch.save({'epoch': epoch, 'model_state_dict': peft_model.state_dict(), 'optimizer_state_dict': optimizer.state_dict(),
-            'loss': avg_train_loss}, path)
-        
-        # Evaluate the model on the validation subset
-        peft_model.eval()
-        avg_eval_loss = evaluate_epoch(peft_model, device, val_dataloader, len_val, criterion)
-        print(f"Epoch {epoch}/{max_iters}: Train {avg_train_loss:.4f} // Val {avg_eval_loss:.4f}")
-    
-    avg_eval_loss_fin = evaluate_epoch(peft_model, device, val_dataloader, len_val, criterion)
-    print(f"Final validation loss: {avg_eval_loss_fin:.4f}")
-        
+ 
 if __name__ == "__main__":
     
     # Parsing command-line options
@@ -327,10 +297,10 @@ if __name__ == "__main__":
     parser.add_argument('-df', '--dists_folder', action='store', dest='dists_folder', default='./distance_matrix', help='Distance matrices folder path.')
 
     # Checkpoint folder
-    parser.add_argument('-cp', '--checkpoint_folder', action='store', dest='checkpoint_folder', default='./checkpoints', help='Folder that stores model checkpoints over training.')
+    parser.add_argument('-cp', '--checkpoint_folder', action='store', dest='checkpoint_folder', default='/content/drive/MyDrive/data/checkpoints', help='Folder that stores model checkpoints over training.')
 
     # Approach
-    parser.add_argument('-a', '--approach', action='store', dest='approach', default='bmDCA', help='Tells which synthetic sequences to use. Can be ESM or bmDCA.')
+    parser.add_argument('-a', '--approach', action='store', dest='approach', default='esm', help='Tells which synthetic sequences to use. Can be ESM or bmDCA.')
 
     # Folder where data for ESM is stored - assumes following folder structure
     # - Folder with data (argument)
@@ -340,7 +310,7 @@ if __name__ == "__main__":
     #   - val
     #     - alignments
     #     - trees
-    parser.add_argument('-esmf', '--esm_folder', action='store', dest='esm_folder', default='./Synthetic_data=50', help='Folder where data for ESM s stored with assumed folder strucutre.')
+    parser.add_argument('-esmf', '--esm_folder', action='store', dest='esm_folder', default='/content/drive/MyDrive/data/Synthetic_data=50', help='Folder where data for ESM s stored with assumed folder strucutre.')
     
     # Get arguments
     args = parser.parse_args()
@@ -354,12 +324,12 @@ if __name__ == "__main__":
     esm_folder = pathlib.Path(args.esm_folder)
 
     if approach == "bmDCA":
-        train_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach)
-        test_model_bmDCA(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach)
+        train_model(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach)
+        test_model(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach)
     
     if approach == "esm":
-        train_model_esm(esm_folder, max_iters, checkpoint_folder, approach)
-
+       #train_model(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach, esm_folder)
+        test_model(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach, esm_folder)
 
     
 

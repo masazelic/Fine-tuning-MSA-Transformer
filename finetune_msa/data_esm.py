@@ -4,12 +4,60 @@ import torch
 import utils
 import pickle
 import pathlib
+import random
 
 from sklearn.model_selection import train_test_split
 from torch.utils.data import IterableDataset, DataLoader 
 from Bio import Phylo
 from tqdm import tqdm 
 from argparse import ArgumentParser
+
+def load_train_val(esm_folder, subsampling=True, ratio=0.05):
+    """ Load pre-defined train-val splits. """
+    
+    # Load data
+    train_dict = read_pickle(esm_folder / "train.pkl")
+    val_dict = read_pickle(esm_folder / "val.pkl")
+
+    # If we select subsampling=True - takes 20% of train and val sequences
+    if subsampling:
+        num_train = round(len(train_dict)*ratio)
+        num_val = round(len(val_dict)*ratio)
+
+        # Subsample the dictionaries
+        train_keys_sample = random.sample(list(train_dict.keys()), num_train)
+        val_keys_sample = random.sample(list(val_dict.keys()), num_val)
+    
+        # Create subsampled dictionaries
+        train_dict = {key: train_dict[key] for key in train_keys_sample}
+        val_dict = {key: val_dict[key] for key in val_keys_sample}
+    
+
+    train_dataloader, len_train = generate_dataloader_esm(train_dict)
+    val_dataloader, len_val = generate_dataloader_esm(val_dict)
+
+    return train_dataloader, len_train, val_dataloader, len_val
+
+def load_test(esm_folder, subsampling=True, ratio=0.05):
+    """ Load test data. """
+
+    # Load data
+    test_dict = read_pickle(esm_folder / "test.pkl")
+
+    # If we select subsampling=True - takes 20% of train and val sequences
+    if subsampling:
+        num_test = round(len(test_dict)*ratio)
+
+        # Subsample the dictionaries
+        train_keys_sample = random.sample(list(test_dict.keys()), num_test)
+    
+        # Create subsampled dictionaries
+        test_dict = {key: test_dict[key] for key in train_keys_sample}
+
+    test_dataloader, len_test = generate_dataloader_esm(test_dict)
+
+    return test_dataloader, len_test
+
  
 
 def create_paths(esm_folder):
@@ -163,20 +211,20 @@ class CustomDatasetEsm(IterableDataset):
     def __iter__(self):
         """ Create iterator for sampling. Since we know that one example from a family has up to 50 sequences that enough for one batch. """
         
-        indexes = list(np.arange(len(self.data)))
+        indexes = list(self.data.keys())
 
         while indexes:
             
             # Select index of a family which will be generated as a batch
-            index = int(np.random.choice(len(indexes), 1))
+            index = int(np.random.choice(indexes, 1))
 
             # Based on that index we need to select both sequences and respective distances from dictionary
             msa_sequences, dists = self.data[index]
 
             # Remove the processed element from the list
-            indexes.pop(index)
+            indexes.remove(index)
 
-            yield msa_sequences, dists
+            yield msa_sequences, dists / np.max(dists)
 
 if __name__ == "__main__":
 

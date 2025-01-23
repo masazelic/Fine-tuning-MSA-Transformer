@@ -194,8 +194,8 @@ def merge_all_families(train_indexes, normalize_dists=True, ensure_same_size=Fal
     for i, pfam_family in enumerate(pfam_families):
         
         # Load path to the specific column attentions and distances
-        dists_random = np.load(DISTS_FOLDER / f"{pfam_family}_random.npy")
-        attns_random = np.load(ATTNS_FOLDER_RAND / f"{pfam_family}_random_mean_on_cols_symm.npy")
+        dists_random = np.load(DISTS_FOLDER / f"{pfam_family}_subtree.npy")
+        attns_random = np.load(ATTNS_FOLDER_SUBT / f"{pfam_family}_subtree_mean_on_cols_symm.npy")
 
         # Load data
         ((attns_train_r, dists_train_r), (attns_test_r, dists_test_r), (n_rows_train_r, n_rows_test_r)) = create_train_test_sets_per_family(attns_random, dists_random, train_indexes[i], normalize_dists=normalize_dists, ensure_same_size=ensure_same_size, zero_attention_diagonal=zero_attention_diagonal)
@@ -362,8 +362,8 @@ if __name__ == "__main__":
     
     # We know all random MSAs are of length 100 and we choose 0.8*DEPTH and 15 MSAs families
     train_indexes = np.array([np.random.choice(100, 80, replace=False) for _ in range(15)])
-    train_final_model(train_indexes)
-    evaluate_model(train_indexes, '/content/drive/MyDrive/Fine-tuning-MSA-Transformer/Fine-tuning-MSA-Transformer/trained_model4.pth')
+    #train_final_model(train_indexes)
+    evaluate_model(train_indexes, '/content/trained_model4.pth')
 
     
 
