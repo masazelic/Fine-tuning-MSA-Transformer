@@ -1,9 +1,9 @@
 # Inferring phylogenetic relationships using MSA Transformer derived embeddings
 
-**Lab Immersion at EPFL**
-**Lab:** Bitbol Lab - Laboratory of Computational Biology and Theoretical Biophysics
-**Professor:** Anne-Florence Bitbol
-**Supervisor:** Damiano Sgarbossa
+**Lab Immersion at EPFL**  
+**Lab:** Bitbol Lab - Laboratory of Computational Biology and Theoretical Biophysics  
+**Professor:** Anne-Florence Bitbol  
+**Supervisor:** Damiano Sgarbossa  
 
 ## Description
 
