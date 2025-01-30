@@ -25,11 +25,24 @@ from argparse import ArgumentParser
 
 np.random.seed(26)
 
-def train_final_model(train_indexes, best_parameters, device, approach, k_fold=5):
-    """ After cross-validation with hyperparameter tuning we are training the model. """
+def train_final_model(pfam_families, dists_folder, attns_folder, train_indexes, best_parameters, device, approach, k_fold=5):
+    """ 
+    Training final model with cross-validated hyperparameters. 
+
+    Args:
+        pfam_family (list): List containing all the family names.
+        dists_folder (path.Pathlib): Path to the folder where distances are stored.
+        attns_folder (path.Pathlib): Path to the folder where attentions are stored.
+        train_indexes (np.array): Indexes that will be part of train set from all families. 
+        best_parameters (dictionary): Dictionary containing best parameters obtained by grid search. 
+        device: Either cpu or cuda. 
+        approach: Either subtree or random.
+        k_fold (int): Number of folds.
+  
+    """
 
     # Preps for K-Fold cross-validation
-    attns_train, dists_train, _, _ = load_data.merge_all_families(train_indexes)
+    attns_train, dists_train, _, _ = load_data.merge_all_families(pfam_families, dists_folder, attns_folder, train_indexes, approach)
     train_dataset = TensorDataset(attns_train, dists_train)
     
     splits = KFold(n_splits=k_fold, shuffle=True, random_state=42)
@@ -99,11 +112,23 @@ def train_final_model(train_indexes, best_parameters, device, approach, k_fold=5
         
         break
 
-def evaluate_model(train_indexes, path, best_parameters, device='cpu'):
-    """ After we trained the model with best hyperparameters, we are going to evaluate it. """
+def evaluate_model(pfam_families, dists_folder, attns_folder, train_indexes, approach, path, best_parameters, device='cpu'):
+    """ 
+    After we trained the model with best hyperparameters, we are going to evaluate it. 
+    
+    Args:
+        pfam_family (list): List containing all the family names.
+        dists_folder (path.Pathlib): Path to the folder where distances are stored.
+        attns_folder (path.Pathlib): Path to the folder where attentions are stored.
+        train_indexes (np.array): Indexes that will be part of train set from all families. 
+        approach: Either subtree or random.
+        path (str): Path where best model is stored.
+        best_parameters (dict): Dictionary where best parameters are stored.
+        device: Either cpu or cuda.
+    """
 
     # Do data loading 
-    _, _, attns_test, dists_test = load_data.merge_all_families(train_indexes)
+    _, _, attns_test, dists_test = load_data.merge_all_families(pfam_families, dists_folder, attns_folder, train_indexes, approach)
     test_dataset = TensorDataset(attns_test, dists_test)
     test_loader = DataLoader(test_dataset, batch_size=best_parameters['batch_size'])
 
@@ -149,16 +174,16 @@ if __name__ == "__main__":
     parser.add_argument('-af', '--attentions_folder', action='store', dest='attentions_folder', default='/content/drive/MyDrive/data/col_attentions_random', help='Folder where attention matrices are stored.')
     
     # Distances folder
-    parser.add_argument('-af', '--distances_folder', action='store', dest='distances_folder', default='/content/drive/MyDrive/data/distance_matrix', help='Folder where distance matrices are stored.')
+    parser.add_argument('-df', '--distances_folder', action='store', dest='distances_folder', default='/content/drive/MyDrive/data/distance_matrix', help='Folder where distance matrices are stored.')
     
     # Approach
-    parser.add_argument('-a', '--approach', action='store', dest='approach', default='subtree', help='Either subtree or random subsampling approach obtained sequences.')
+    parser.add_argument('-a', '--approach', action='store', dest='approach', default='random', help='Either subtree or random subsampling approach obtained sequences.')
     
     # Train or Test
-    parser.add_argument('-r', '-train_test', action='store', dest='train_test', help='Either train or test model.')
+    parser.add_argument('-r', '-train_test', action='store', dest='train_test', default='train', help='Either train or test model.')
     
     # Path to the best parameters
-    parser.add_argument('-bp', '--best_parameters', action='store', dest='best_parameters_path', help='Path to the best parameters.')
+    parser.add_argument('-bp', '--best_parameters', action='store', dest='best_parameters_path', default='/content/drive/MyDrive/Fine-tuning-MSA-Transformer/Fine-tuning-MSA-Transformer/bmDCA/fc_network/parameters/best_parameters_subtree.pkl',help='Path to the best parameters.')
     
     # Get arguments
     args = parser.parse_args()
@@ -174,7 +199,7 @@ if __name__ == "__main__":
     
     # Load parameters of the model
     with open(best_parameters_path, 'rb') as f:
-        best_parameters = pickle.load()
+        best_parameters = pickle.load(f)
         
     # Generate train indexes 
     train_indexes = []
@@ -186,9 +211,9 @@ if __name__ == "__main__":
         train_indexes.append(np.random.choice(n_seq, round(n_seq * ratio_train_test), replace=False))
         
     if train_test == 'train':
-        train_final_model(train_indexes, best_parameters, device)
+        train_final_model(pfam_families, dists_folder, attns_folder, train_indexes, best_parameters, device, approach)
     else:
-        evaluate_model(train_indexes, '/content/trained_{approach}.pth')
+        evaluate_model(pfam_families, dists_folder, attns_folder, train_indexes, approach, './trained_{approach}.pth', best_parameters, device)
 
     
 
