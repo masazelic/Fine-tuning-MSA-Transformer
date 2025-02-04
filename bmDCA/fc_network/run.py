@@ -107,7 +107,7 @@ def train_final_model(pfam_families, dists_folder, attns_folder, train_indexes, 
         plt.savefig('overfitting4.png')
 
         # Save the model
-        path = 'trained_{approach}.pth'
+        path = './models/trained_{approach}.pth'
         torch.save(early_stopping.best_model_state, path)
         
         break
@@ -213,7 +213,7 @@ if __name__ == "__main__":
     if train_test == 'train':
         train_final_model(pfam_families, dists_folder, attns_folder, train_indexes, best_parameters, device, approach)
     else:
-        evaluate_model(pfam_families, dists_folder, attns_folder, train_indexes, approach, './trained_{approach}.pth', best_parameters, device)
+        evaluate_model(pfam_families, dists_folder, attns_folder, train_indexes, approach, './models/trained_{approach}.pth', best_parameters, device)
 
     
 

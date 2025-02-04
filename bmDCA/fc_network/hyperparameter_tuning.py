@@ -148,7 +148,7 @@ if __name__ == "main":
     parser.add_argument('-af', '--attentions_folder', action='store', dest='attentions_folder', default='/content/drive/MyDrive/data/col_attentions_random', help='Folder where attention matrices are stored.')
     
     # Distances folder
-    parser.add_argument('-af', '--distances_folder', action='store', dest='distances_folder', default='/content/drive/MyDrive/data/distance_matrix', help='Folder where distance matrices are stored.')
+    parser.add_argument('-df', '--distances_folder', action='store', dest='distances_folder', default='/content/drive/MyDrive/data/distance_matrix', help='Folder where distance matrices are stored.')
     
     # Approach
     parser.add_argument('-a', '--approach', action='store', dest='approach', default='subtree', help='Either subtree or random subsampling approach obtained sequences.')
