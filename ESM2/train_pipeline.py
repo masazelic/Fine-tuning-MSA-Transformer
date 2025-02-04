@@ -22,6 +22,7 @@ from sklearn import metrics
 max_iters = 20
 batch_size = 32
 learning_rate = 0.0001
+architecture = [512,256,128,64,32]
 r = 16
 
 pfam_families = [
@@ -133,7 +134,23 @@ def evaluate_epoch(model, device, dataloader, len_val, criterion):
     return val_loss / num_batches, store_predictions, store_ground_truths
 
 def train_model(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach, esm_folder):
-    """ Function that does model training for the case of synthetic sequences generated with bmDCA. """
+    """
+    Function that does model training. 
+    
+    Args:
+        pfam_families (list): List containing all pfam names for bmDCA approach.
+        ratio_train_test (float): Ratio of train data compared to test. 
+        ratio_val_train (float): Ratio of val data comapred to train. 
+        max_iters (int): Maximum number of iterations. 
+        max_depth (int): Maximum depth of family.
+        r (int): Hyperparameter for LoRA.
+        msas_folder (pathlib.Path): Path to the folder where MSA synthetic sequences are stored for bmDCA approach.
+        dists_folder (pathlib.Path): Path to the folder where distance matrices are stored for bmDCA approach. 
+        checkpoint_folder (pathlib.Path): Path to the folder where we want to save trained model.
+        approach (str): Either esm or bmDCA.
+        esm_folder (pathlib.Path): Path to the folder where MSA synthetic sequences are stored for ESM approach. 
+    
+    """
     
     # Save train and validation loss
     train_loss = []
@@ -148,7 +165,7 @@ def train_model(pfam_families, ratio_train_test, ratio_val_train, max_iters, max
         train_data, len_train, val_data, len_val, test_data, len_test = data_bmdca.train_val_test_split(pfam_families, ratio_train_test, ratio_val_train, max_depth, msas_folder, dists_folder)
 
     # Define Model, Model LoRA, optimizer, loss function
-    model = model_finetune.FineTuneMSATransformer().to(device)
+    model = model_finetune.FineTuneMSATransformer(architecture=architecture).to(device)
     store_target_modules, store_modules_to_save = utils.get_target_save_modules(model)
     
     config = peft.LoraConfig(r=r, target_modules=store_target_modules, modules_to_save=store_modules_to_save)
@@ -227,8 +244,22 @@ def train_model(pfam_families, ratio_train_test, ratio_val_train, max_iters, max
     # Save model
     torch.save(early_stopping.best_model_state, checkpoint_folder)
 
-def test_model(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach, esm_folder):
-    """ Function that does model training for the case of synthetic sequences generated with bmDCA. """
+def test_model(pfam_families, ratio_train_test, ratio_val_train, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach, esm_folder):
+    """
+    Function that does model evaluation on test data.
+    
+    Args:
+        pfam_families (list): List containing all pfam names for bmDCA approach.
+        ratio_train_test (float): Ratio of train data compared to test. 
+        ratio_val_train (float): Ratio of val data comapred to train. 
+        max_depth (int): Maximum depth of family.
+        r (int): Hyperparameter for LoRA.
+        msas_folder (pathlib.Path): Path to the folder where MSA synthetic sequences are stored for bmDCA approach.
+        dists_folder (pathlib.Path): Path to the folder where distance matrices are stored for bmDCA approach. 
+        checkpoint_folder (pathlib.Path): Path to the folder where we want to save trained model.
+        approach (str): Either esm or bmDCA.
+        esm_folder (pathlib.Path): Path to the folder where MSA synthetic sequences are stored for ESM approach. 
+    """
 
     # Checkpoint path - define with the respect to the approach
     checkpoint_folder = checkpoint_folder / f"{approach}_model.pth"
@@ -325,11 +356,11 @@ if __name__ == "__main__":
 
     if approach == "bmDCA":
         train_model(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach)
-        test_model(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach)
+        test_model(pfam_families, ratio_train_test, ratio_val_train, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach)
     
     if approach == "esm":
-       #train_model(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach, esm_folder)
-        test_model(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach, esm_folder)
+        train_model(pfam_families, ratio_train_test, ratio_val_train, max_iters, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach, esm_folder)
+        test_model(pfam_families, ratio_train_test, ratio_val_train, max_depth, r, msas_folder, dists_folder, checkpoint_folder, approach, esm_folder)
 
     
 

@@ -51,7 +51,7 @@ python generate_distance_matrices.py -h
 
 For performing regression analysis, go over `Regression.ipynb` in `regression` folder. Cell that requires user input of specific paths/parameters is clearly noted.  
 
-3. Training Fully-connected network with MSA Transformer's column attentions  
+3. Training Fully-connected network with MSA Transformer's column attentions as embeddings
 
 Code supporting this approach can be found in `fc_network` folder. 
 
@@ -61,7 +61,7 @@ For tuning hyperparameters such as network architecture and learning rate for *s
 python hyperparameter_tuning.py -af <your_attentions_folder> -df <your_distances_folder> -a <subtree/random>
 ```
 
-**NOTE 1:** The code assumes that attention matrices and distances are pre-computed. For the specific families noted above, you can download patristic distances from [link](https://drive.google.com/drive/u/0/folders/11wxuhhqMeEoEmp_EJYjiIYCOFJ-vZqyY) and attention matrices from [link](https://drive.google.com/drive/u/0/folders/19jG7KDS7E8LqrDNSzA6pAEJAzDVXWfLF) (subtree approach) and [link](https://drive.google.com/drive/u/0/folders/1EYuajAN9sAv6sGH8N77wHv3OlcbhtpJs).  
+**NOTE 1:** The code assumes that attention matrices and distances are pre-computed. For the specific families noted above, you can download patristic distances from [link](https://drive.google.com/drive/u/0/folders/11wxuhhqMeEoEmp_EJYjiIYCOFJ-vZqyY) and attention matrices from [link](https://drive.google.com/drive/u/0/folders/19jG7KDS7E8LqrDNSzA6pAEJAzDVXWfLF) (subtree approach) and [link](https://drive.google.com/drive/u/0/folders/1EYuajAN9sAv6sGH8N77wHv3OlcbhtpJs) (random approach).  
 
 **NOTE 2:** Notation for both distances and attention matrices is in form *familiyName_approach_var.npy*.  
 
@@ -80,6 +80,42 @@ For **evaluating** the trained model on test dataset, you can run following comm
 ```
 python run.py -af <your_attentions_folder> -df <your_distances_folder> -a <subtree/random> -r test -bp <your_best_params_file>
 ```  
+
+4. Fine-tuning MSA Transformer's column attentions with LoRA  
+
+This code can be found in `finetune_msa` folder. To train and evaluate the model run the following command:  
+
+```
+python train_pipeline.py -mf <your_msas_folder> -df <your_distances_folder> -cp <your_checkpoint_folder> -a bmDCA
+```
+
+**NOTE 1:** Since training and evaluation took around an hour, non-exhaustive hyperparameter search was performed. Best parameters (for which results are reported) are specified at the top of `train_pipeline.py` script.  
+
+**NOTE 2:** Trained model is larger than 100 MB and therefore not included.  
+
+### ESM2 Generated Data  
+
+ESM2 generated sequences are only used for Fine-tuning MSA Transformer's column attentions due to their larger volume. They are in form of small trees (up tp 50 sequences). Code for this approach is stored in `ESM2` folder.
+
+For organization of folder containing ESM2 data refer to [link](https://drive.google.com/drive/u/0/folders/1iwUsaZ4TeXyxrQbqoI5R2zrLS4bCva7Y). Note that `val` folder contains test data.  
+
+To save computational time during training, distance matrices are pre-computed for each small tree and saved as `.pkl` dictionaries by running the following command:
+
+```
+python create_and_store_dists_matrices_esm.py -ef <your_esm_folder> -dft <your_dists_train_folder> -dfts <your_dists_test_folder>
+```  
+
+To train and evaluate the model run the following command:  
+
+```
+python train_pipeline.py  -cp <your_checkpoint_folder> -a esm -esmf <your_esm_folder>
+``` 
+
+Regarding hyperparameters and trained model, same rules apply as above. 
+
+
+
+
 
 
 
